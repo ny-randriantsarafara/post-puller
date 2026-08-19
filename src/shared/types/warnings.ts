@@ -1,0 +1,25 @@
+export const POST_WARNINGS = [
+  'MISSING_POST_ID',
+  'MISSING_POST_URL',
+  'MISSING_AUTHOR',
+  'MISSING_TEXT',
+  'TRUNCATED_TEXT',
+  'MISSING_DATE',
+  'UNPARSED_DATE',
+  'MISSING_REACTION_COUNT',
+  'COLLAPSED_COMMENTS',
+  'HIDDEN_COMMENTS',
+  'UNKNOWN_ATTACHMENT',
+] as const;
+
+export type PostWarning = (typeof POST_WARNINGS)[number];
+
+export const COMMENT_WARNINGS = [
+  'MISSING_AUTHOR',
+  'MISSING_TEXT',
+  'MISSING_DATE',
+  'UNPARSED_DATE',
+  'MISSING_REACTION_COUNT',
+] as const;
+
+export type CommentWarning = (typeof COMMENT_WARNINGS)[number];

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sample Group</title>
+  </head>
+  <body>
+    <h1 role="heading">Sample Group</h1>
+    <div role="feed">
+      <div data-focus="feed_story">
+        <h2><div role="button">Anonymous member</div></h2>
+        <span><abbr aria-label="2 hours ago"><span>2h</span></abbr></span>
+        <a href="/groups/sample-group/posts/1001/">Post</a>
+        <div data-ad-preview="message" data-ad-rendering-role="story_message">
+          <div dir="auto">
+            First captured…
+            <div
+              role="button"
+              tabindex="0"
+              onclick="this.parentElement.textContent = 'First captured post with expanded text'"
+            >
+              See more
+            </div>
+          </div>
+        </div>
+        <span aria-label="Like: 5 people">5</span>
+      </div>
+      <div data-focus="feed_story">
+        <h2><svg aria-label="John Smith"></svg></h2>
+        <a href="/groups/sample-group/posts/1002/" aria-label="3 hours ago">Post</a>
+        <div data-ad-preview="message" data-ad-rendering-role="story_message">
+          <div dir="auto">Second captured post</div>
+        </div>
+        <span aria-label="Like: 2 people">2</span>
+      </div>
+      <div id="virtualized-post" data-focus="feed_story" style="min-height: 1200px">
+        <div data-virtualized="true"><div hidden></div></div>
+      </div>
+    </div>
+    <script>
+      window.addEventListener(
+        'scroll',
+        () => {
+          // Comet empties a story once it scrolls out of the viewport.
+          const stories = document.querySelectorAll('[data-focus="feed_story"]');
+          stories[1].innerHTML = '<div data-virtualized="true"></div>';
+
+          const placeholder = document.getElementById('virtualized-post');
+          placeholder.innerHTML = `
+            <h2><svg aria-label="Scroll Author"></svg></h2>
+            <a href="/groups/sample-group/posts/1003/" aria-label="1 hour ago">Post</a>
+            <div data-ad-preview="message" data-ad-rendering-role="story_message">
+              <div dir="auto">Post loaded after manual scroll</div>
+            </div>
+            <span aria-label="Like: 1 people">1</span>
+          `;
+        },
+        { once: true },
+      );
+    </script>
+  </body>
+</html>

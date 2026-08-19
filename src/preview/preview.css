@@ -1,0 +1,160 @@
+:root {
+  color: #1c1e21;
+  background: #f0f2f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.preview {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.preview__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview__title {
+  margin: 0;
+}
+
+.preview__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.preview__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview__summary-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.preview__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.preview__summary-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.preview__summary-name {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.preview__summary-meta {
+  margin: 0;
+  font-size: 12px;
+  color: #65676b;
+}
+
+.preview__filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.preview__filter-label {
+  font-size: 12px;
+  color: #65676b;
+}
+
+.preview__filter-select {
+  border: 1px solid #ccd0d5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.button {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  background: #1877f2;
+  color: #fff;
+}
+
+.button--secondary {
+  background: #e4e6eb;
+  color: #1c1e21;
+}
+
+.post-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.post-card__meta {
+  font-size: 12px;
+  color: #65676b;
+}
+
+.post-card__group {
+  font-weight: 600;
+}
+
+.post-card__link {
+  font-size: 13px;
+  color: #1877f2;
+  text-decoration: none;
+}
+
+.post-card__link:hover {
+  text-decoration: underline;
+}
+
+.post-card__warnings {
+  color: #b42318;
+  font-size: 12px;
+}
+
+.comment-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.comment-list__item {
+  margin-bottom: 8px;
+}
+
+.preview__pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preview__empty {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+}

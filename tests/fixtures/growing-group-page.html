@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Auto Scroll Group</title>
+    <style>
+      [data-focus='feed_story'] {
+        min-height: 600px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 role="heading">Auto Scroll Group</h1>
+    <div role="feed">
+      <div data-focus="feed_story" id="story-without-id">
+        <h2><svg aria-label="Anna Author"></svg></h2>
+        <span><abbr aria-label="2 hours ago"><span>2h</span></abbr></span>
+        <div data-ad-preview="message" data-ad-rendering-role="story_message">
+          <div dir="auto">
+            A post with no Facebook identifier at all, which must never be stored
+            twice while the page scrolls itself.
+          </div>
+        </div>
+        <span aria-label="Like: 4 people">4</span>
+      </div>
+      <div data-focus="feed_story">
+        <h2><svg aria-label="Ben Builder"></svg></h2>
+        <a href="/groups/auto-group/posts/2001/" aria-label="3 hours ago">Post</a>
+        <div data-ad-preview="message" data-ad-rendering-role="story_message">
+          <div dir="auto">Second post, visible before any scrolling happens</div>
+        </div>
+        <span aria-label="Like: 2 people">2</span>
+      </div>
+    </div>
+    <script>
+      const TOTAL_STORIES = 6;
+      let loadedStories = 2;
+      let hasAgedFirstStory = false;
+
+      function renderStory(index) {
+        return `
+          <div data-focus="feed_story">
+            <h2><svg aria-label="Author ${index}"></svg></h2>
+            <a href="/groups/auto-group/posts/300${index}/" aria-label="${index} hours ago">Post</a>
+            <div data-ad-preview="message" data-ad-rendering-role="story_message">
+              <div dir="auto">Post number ${index}, loaded while the page scrolled</div>
+            </div>
+            <span aria-label="Like: ${index} people">${index}</span>
+          </div>
+        `;
+      }
+
+      // Facebook re-renders a post with a fresh node and an older relative date as
+      // the session goes on, which changes the content hash of a post that has no
+      // identifier of its own.
+      function ageFirstStory() {
+        const story = document.getElementById('story-without-id');
+        const timestamp = story.querySelector('abbr');
+        timestamp.setAttribute('aria-label', '3 hours ago');
+        timestamp.firstElementChild.textContent = '3h';
+        story.replaceWith(story.cloneNode(true));
+      }
+
+      window.addEventListener('scroll', () => {
+        if (loadedStories < TOTAL_STORIES) {
+          loadedStories += 1;
+          document
+            .querySelector('[role="feed"]')
+            .insertAdjacentHTML('beforeend', renderStory(loadedStories));
+          return;
+        }
+
+        if (!hasAgedFirstStory) {
+          hasAgedFirstStory = true;
+          ageFirstStory();
+        }
+      });
+    </script>
+  </body>
+</html>
