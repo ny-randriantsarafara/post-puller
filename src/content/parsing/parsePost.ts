@@ -1,4 +1,5 @@
 import type { GroupInfo, ParsedPostDraft, PostAuthor, PostWarning } from '../../shared/types';
+import { isPartialReactionBreakdown } from '../../shared/types/reactions';
 import {
   buildGroupPostUrl,
   extractPostIdFromElement,
@@ -15,14 +16,15 @@ import {
   readTrimmedText,
 } from './domText';
 import { parseAttachment } from './parseAttachment';
-import { parseComment } from './parseComment';
-import { parseReactionCountFromElement } from './parseCount';
+import { parseComment, type ParsedCommentContext } from './parseComment';
+import { parseEngagement } from './parseEngagement';
 import {
   ANONYMOUS_AUTHOR_PATTERNS,
   COMPACT_RELATIVE_DATE,
   SEE_MORE_PATTERNS,
   SELECTORS,
   VIEW_MORE_COMMENTS_PATTERNS,
+  VIEW_REPLIES_PATTERNS,
 } from './selectors';
 
 function findPostLink(element: Element): string | null {
@@ -131,15 +133,18 @@ function hasSeeMoreButton(element: Element): boolean {
   return false;
 }
 
+function matchesCommentExpansionPattern(label: string): boolean {
+  const patterns = [...VIEW_MORE_COMMENTS_PATTERNS, ...VIEW_REPLIES_PATTERNS];
+  return patterns.some((pattern) => pattern.test(label));
+}
+
 function hasCollapsedComments(element: Element): boolean {
   const buttons = [...element.querySelectorAll(SELECTORS.seeMoreButton)];
 
   for (const button of buttons) {
     const label = readTrimmedText(button);
-    for (const pattern of VIEW_MORE_COMMENTS_PATTERNS) {
-      if (pattern.test(label)) {
-        return true;
-      }
+    if (matchesCommentExpansionPattern(label)) {
+      return true;
     }
   }
 
@@ -378,38 +383,67 @@ function isInsideNestedComment(postElement: Element, element: Element): boolean 
   return postElement.contains(nearestComment);
 }
 
-function parsePostReactionCount(postElement: Element): number | null {
-  const candidates = [...postElement.querySelectorAll('[aria-label]')].filter(
-    (element) => !isInsideNestedComment(postElement, element),
-  );
-
-  for (const candidate of candidates) {
-    const label = candidate.getAttribute('aria-label') ?? '';
-    if (!/reactions?|réactions?|^like:/i.test(label)) {
-      continue;
-    }
-
-    const reactionCount = parseReactionCountFromElement(candidate);
-    if (reactionCount !== null) {
-      return reactionCount;
-    }
+function resolveCommentContext(
+  postElement: Element,
+  commentElement: Element,
+): ParsedCommentContext {
+  const wrapper = commentElement.closest(SELECTORS.commentWrapper);
+  if (wrapper === null || !postElement.contains(wrapper)) {
+    return {
+      commentId: null,
+      parentCommentId: null,
+      depth: 0,
+    };
   }
 
-  return null;
+  const commentId = wrapper.getAttribute('data-commentid');
+  let parentCommentId: string | null = null;
+  let depth = 0;
+  let current = wrapper.parentElement;
+
+  while (current !== null && postElement.contains(current)) {
+    if (current.matches(SELECTORS.commentWrapper)) {
+      if (parentCommentId === null) {
+        parentCommentId = current.getAttribute('data-commentid');
+      }
+      depth += 1;
+    }
+    current = current.parentElement;
+  }
+
+  return {
+    commentId,
+    parentCommentId,
+    depth,
+  };
 }
 
 function parseVisibleComments(postElement: Element): ParsedPostDraft['comments'] {
-  const cometComments = [
-    ...postElement.querySelectorAll(SELECTORS.commentArticle),
-  ];
+  const commentArticles = [...postElement.querySelectorAll(SELECTORS.commentArticle)];
   const nestedArticles =
-    cometComments.length > 0
-      ? cometComments
+    commentArticles.length > 0
+      ? commentArticles
       : [...postElement.querySelectorAll(SELECTORS.article)].filter(
           (article) => article !== postElement,
         );
 
-  return nestedArticles.map((commentElement) => parseComment(commentElement));
+  const seenCommentIds = new Set<string>();
+  const comments: ParsedPostDraft['comments'] = [];
+
+  for (const commentElement of nestedArticles) {
+    const context = resolveCommentContext(postElement, commentElement);
+    if (context.commentId !== null) {
+      if (seenCommentIds.has(context.commentId)) {
+        continue;
+      }
+
+      seenCommentIds.add(context.commentId);
+    }
+
+    comments.push(parseComment(commentElement, context));
+  }
+
+  return comments;
 }
 
 export function parsePost(
@@ -427,7 +461,7 @@ export function parsePost(
   const author = parsePostAuthor(postElement);
   const text = parsePostText(postElement);
   const date = parsePostDate(postElement);
-  const reactionCount = parsePostReactionCount(postElement);
+  const engagement = parseEngagement(postElement);
   const attachment = parseAttachment(postElement);
   const comments = parseVisibleComments(postElement);
 
@@ -453,12 +487,28 @@ export function parsePost(
     warnings.push('TRUNCATED_TEXT');
   }
 
-  if (reactionCount === null) {
+  if (engagement.reactionCount === null) {
     warnings.push('MISSING_REACTION_COUNT');
+  }
+
+  if (
+    isPartialReactionBreakdown(
+      engagement.reactionBreakdown,
+      engagement.reactionCount,
+    )
+  ) {
+    warnings.push('PARTIAL_REACTION_BREAKDOWN');
   }
 
   if (hasCollapsedComments(postElement)) {
     warnings.push('COLLAPSED_COMMENTS');
+  }
+
+  if (
+    engagement.commentCount !== null &&
+    comments.length < engagement.commentCount
+  ) {
+    warnings.push('MISSING_COMMENTS');
   }
 
   if (comments.length === 0 && hasCollapsedComments(postElement)) {
@@ -477,7 +527,10 @@ export function parsePost(
     text,
     displayedDate: date.displayedDate,
     publishedAt: date.publishedAt,
-    reactionCount,
+    reactionCount: engagement.reactionCount,
+    reactionBreakdown: engagement.reactionBreakdown,
+    commentCount: engagement.commentCount,
+    shareCount: engagement.shareCount,
     comments,
     attachments: [attachment],
     warnings,

@@ -112,6 +112,25 @@ body {
   color: #65676b;
 }
 
+.popup__option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.popup__option-label {
+  font-weight: 600;
+}
+
+.popup__option-hint {
+  font-size: 11px;
+  color: #65676b;
+}
+
 .popup__group-stats {
   display: flex;
   flex-direction: column;

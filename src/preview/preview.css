@@ -133,6 +133,12 @@ body {
   text-decoration: underline;
 }
 
+.post-card__reactions {
+  margin: 0 0 8px;
+  color: #65676b;
+  font-size: 12px;
+}
+
 .post-card__warnings {
   color: #b42318;
   font-size: 12px;

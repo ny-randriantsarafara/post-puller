@@ -30,6 +30,9 @@ function createSamplePost(index: number, warnings: CapturedPost['warnings'] = []
     displayedDate: '1 hour ago',
     publishedAt: capturedAt,
     reactionCount: 1,
+    reactionBreakdown: {},
+    commentCount: null,
+    shareCount: null,
     comments: [],
     attachments: [{ kind: 'none' }],
     capturedAt,
@@ -214,6 +217,52 @@ describe('postRepository', () => {
     };
 
     expect(isBetterParse(existing, incoming)).toBe(true);
+  });
+
+  it('keeps expanded comments when a later sighting only shows one comment', async () => {
+    await clearPosts();
+    const basePost = createSamplePost(8);
+    const expanded = {
+      ...basePost,
+      comments: [
+        {
+          commentId: '1',
+          parentCommentId: null,
+          depth: 0,
+          author: { kind: 'named', name: 'Jane', profileUrl: null },
+          text: 'First comment',
+          displayedDate: '1 hour ago',
+          publishedAt: basePost.publishedAt,
+          reactionCount: null,
+          reactionBreakdown: {},
+          warnings: [],
+        },
+        {
+          commentId: '2',
+          parentCommentId: null,
+          depth: 0,
+          author: { kind: 'named', name: 'John', profileUrl: null },
+          text: 'Second comment',
+          displayedDate: '50 minutes ago',
+          publishedAt: basePost.publishedAt,
+          reactionCount: null,
+          reactionBreakdown: {},
+          warnings: [],
+        },
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+    const thinned = {
+      ...basePost,
+      comments: expanded.comments.slice(0, 1),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await upsertPosts([expanded]);
+    await upsertPosts([thinned]);
+
+    const storedPosts = await listAllPosts();
+    expect(storedPosts[0]?.comments).toHaveLength(2);
   });
 
   it('builds per-group stats from stored posts', async () => {

@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { REACTION_TYPES } from '../types/reactions';
+
+const reactionBreakdownSchema = z
+  .record(z.enum(REACTION_TYPES), z.number())
+  .default({});
 
 const postAuthorSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -29,11 +34,15 @@ const attachmentSchema = z.discriminatedUnion('kind', [
 ]);
 
 const commentSchema = z.object({
+  commentId: z.string().nullable().default(null),
+  parentCommentId: z.string().nullable().default(null),
+  depth: z.number().default(0),
   author: postAuthorSchema,
   text: z.string().nullable(),
   displayedDate: z.string().nullable(),
   publishedAt: z.string().nullable(),
   reactionCount: z.number().nullable(),
+  reactionBreakdown: reactionBreakdownSchema,
   warnings: z.array(
     z.enum([
       'MISSING_AUTHOR',
@@ -61,6 +70,9 @@ export const capturedPostSchema = z.object({
   displayedDate: z.string().nullable(),
   publishedAt: z.string().nullable(),
   reactionCount: z.number().nullable(),
+  reactionBreakdown: reactionBreakdownSchema,
+  commentCount: z.number().nullable().default(null),
+  shareCount: z.number().nullable().default(null),
   comments: z.array(commentSchema),
   attachments: z.array(attachmentSchema),
   capturedAt: z.string(),
@@ -75,8 +87,10 @@ export const capturedPostSchema = z.object({
       'MISSING_DATE',
       'UNPARSED_DATE',
       'MISSING_REACTION_COUNT',
+      'PARTIAL_REACTION_BREAKDOWN',
       'COLLAPSED_COMMENTS',
       'HIDDEN_COMMENTS',
+      'MISSING_COMMENTS',
       'UNKNOWN_ATTACHMENT',
     ]),
   ),
@@ -105,6 +119,7 @@ export const captureSessionSchema = z.object({
   status: z.enum(['idle', 'capturing', 'interrupted']),
   // Defaulted so a session stored before the scan modes existed still reads back.
   mode: captureModeSchema.default('manual'),
+  expandComments: z.boolean().default(false),
   autoScrollCompletedAt: z.string().nullable().default(null),
   tabId: z.number().nullable(),
   groupUrl: z.string().nullable(),
@@ -122,6 +137,7 @@ export const backgroundRequestSchema = z.discriminatedUnion('type', [
     type: z.literal('START_CAPTURE'),
     tabId: z.number(),
     mode: captureModeSchema,
+    expandComments: z.boolean().default(false),
   }),
   z.object({ type: z.literal('STOP_CAPTURE') }),
   z.object({ type: z.literal('CLEAR_DATA') }),
@@ -151,7 +167,11 @@ export const backgroundResponseSchema = z.discriminatedUnion('type', [
 ]);
 
 export const contentRequestSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('BEGIN_CAPTURE'), mode: captureModeSchema }),
+  z.object({
+    type: z.literal('BEGIN_CAPTURE'),
+    mode: captureModeSchema,
+    expandComments: z.boolean().default(false),
+  }),
   z.object({ type: z.literal('END_CAPTURE') }),
   z.object({ type: z.literal('GET_PAGE_INFO') }),
 ]);

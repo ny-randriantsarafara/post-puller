@@ -174,4 +174,33 @@ describe('parsePost', () => {
 
     expect(parsed.warnings).not.toContain('TRUNCATED_TEXT');
   });
+
+  it('reads footer totals and the visible reaction breakdown', () => {
+    const postElement = loadFixture('post-with-reaction-breakdown.html');
+    const parsed = parsePost(postElement, group);
+
+    expect(parsed.reactionCount).toBe(535);
+    expect(parsed.reactionBreakdown).toEqual({
+      like: 375,
+      love: 142,
+    });
+    expect(parsed.commentCount).toBe(22);
+    expect(parsed.shareCount).toBe(2);
+    expect(parsed.warnings).toContain('PARTIAL_REACTION_BREAKDOWN');
+  });
+
+  it('parses comment ids, depth, and the real comment count', () => {
+    const postElement = loadFixture('post-with-comment-thread.html');
+    const parsed = parsePost(postElement, group);
+
+    expect(parsed.commentCount).toBe(4);
+    expect(parsed.comments).toHaveLength(2);
+    expect(parsed.comments[0]?.commentId).toBe('100');
+    expect(parsed.comments[0]?.text).toBe('Parent comment text');
+    expect(parsed.comments[1]?.commentId).toBe('101');
+    expect(parsed.comments[1]?.parentCommentId).toBe('100');
+    expect(parsed.comments[1]?.depth).toBe(1);
+    expect(parsed.warnings).toContain('MISSING_COMMENTS');
+    expect(parsed.warnings).toContain('COLLAPSED_COMMENTS');
+  });
 });

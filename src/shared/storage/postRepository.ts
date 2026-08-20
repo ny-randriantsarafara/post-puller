@@ -1,6 +1,6 @@
 import type { CapturedPost, IdentitySource } from '../types';
 import { capturedPostSchema } from '../messaging/protocol';
-import { isBetterCapturedPost } from '../captureQuality';
+import { isBetterCapturedPost, mergeComments } from '../captureQuality';
 import {
   contradictsStoredIdentity,
   isIdentifiableCapturedPost,
@@ -180,6 +180,7 @@ async function writeMergedPost(
   const mergedPost: CapturedPost = {
     ...incomingPost,
     ...resolveMergedIdentity(existingPost, incomingPost),
+    comments: mergeComments(existingPost.comments, incomingPost.comments),
     capturedAt: existingPost.capturedAt,
     updatedAt: incomingPost.updatedAt,
   };

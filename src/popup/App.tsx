@@ -11,6 +11,7 @@ import {
 } from '../shared/stats/groupStats';
 import type { CaptureMode, CaptureSession } from '../shared/types';
 import { EMPTY_CAPTURE_SESSION } from '../shared/types';
+import { ExpandCommentsOption } from './components/ExpandCommentsOption';
 import { GroupStatsList } from './components/GroupStatsList';
 import { MetricCard } from './components/MetricCard';
 import { ScanModeSelector } from './components/ScanModeSelector';
@@ -72,6 +73,17 @@ function resolveSelectedMode(
   return requestedMode;
 }
 
+function resolveSelectedExpandComments(
+  session: CaptureSession,
+  requestedExpandComments: boolean,
+): boolean {
+  if (session.status === 'capturing') {
+    return session.expandComments;
+  }
+
+  return requestedExpandComments;
+}
+
 async function queryActiveTabId(): Promise<number | null> {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const activeTab = tabs[0];
@@ -85,6 +97,7 @@ async function queryActiveTabId(): Promise<number | null> {
 export function App() {
   const [session, setSession] = useState<CaptureSession>(EMPTY_CAPTURE_SESSION);
   const [requestedMode, setRequestedMode] = useState<CaptureMode>('manual');
+  const [requestedExpandComments, setRequestedExpandComments] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -143,7 +156,12 @@ export function App() {
       return;
     }
 
-    await runSessionCommand({ type: 'START_CAPTURE', tabId, mode: requestedMode });
+    await runSessionCommand({
+      type: 'START_CAPTURE',
+      tabId,
+      mode: requestedMode,
+      expandComments: requestedExpandComments,
+    });
   };
 
   const handleStopCapture = async () => {
@@ -188,6 +206,10 @@ export function App() {
   const autoScrollMessage = getAutoScrollMessage(session);
   const isCapturing = session.status === 'capturing';
   const selectedMode = resolveSelectedMode(session, requestedMode);
+  const selectedExpandComments = resolveSelectedExpandComments(
+    session,
+    requestedExpandComments,
+  );
   const totals = sumGroupStats(session.groupStats);
   const activeGroupStats = findGroupStats(session.groupStats, session.groupUrl);
   const activeGroupLabel = getActiveGroupLabel(session);
@@ -222,6 +244,12 @@ export function App() {
         mode={selectedMode}
         isDisabled={isBusy || isCapturing}
         onModeChange={setRequestedMode}
+      />
+
+      <ExpandCommentsOption
+        expandComments={selectedExpandComments}
+        isDisabled={isBusy || isCapturing}
+        onExpandCommentsChange={setRequestedExpandComments}
       />
 
       {autoScrollMessage !== null && (

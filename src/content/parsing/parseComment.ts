@@ -1,18 +1,32 @@
-import type { CommentWarning, PostAuthor } from '../../shared/types';
+import type { CommentWarning, PostAuthor, ReactionBreakdown } from '../../shared/types';
 import {
   detectRelativeDateLocale,
   parseRelativeDate,
 } from '../../shared/time/relativeDate';
 import { readTrimmedText } from './domText';
-import { parseCommentReactionCount } from './parseCount';
-import { SELECTORS, ANONYMOUS_AUTHOR_PATTERNS } from './selectors';
+import { parseCommentEngagement } from './parseEngagement';
+import {
+  ANONYMOUS_AUTHOR_PATTERNS,
+  SEE_MORE_PATTERNS,
+  SELECTORS,
+} from './selectors';
+
+export type ParsedCommentContext = {
+  commentId: string | null;
+  parentCommentId: string | null;
+  depth: number;
+};
 
 export type ParsedComment = {
+  commentId: string | null;
+  parentCommentId: string | null;
+  depth: number;
   author: PostAuthor;
   text: string | null;
   displayedDate: string | null;
   publishedAt: string | null;
   reactionCount: number | null;
+  reactionBreakdown: ReactionBreakdown;
   warnings: CommentWarning[];
 };
 
@@ -108,9 +122,44 @@ function parseCommentAuthor(element: Element): PostAuthor {
   return { kind: 'unknown' };
 }
 
+function shouldSkipCommentTextNode(node: Element): boolean {
+  if (node.closest('[role="button"]') !== null) {
+    return true;
+  }
+
+  if (node.closest(SELECTORS.heading) !== null) {
+    return true;
+  }
+
+  if (
+    node.closest(
+      `${SELECTORS.link}[href*="/user/"], ${SELECTORS.link}[href*="profile.php"]`,
+    ) !== null
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function parseCommentText(element: Element): string | null {
   const textBlocks = [...element.querySelectorAll('[dir="auto"]')]
-    .map((node) => readTrimmedText(node))
+    .filter((node) => !shouldSkipCommentTextNode(node))
+    .map((node) => {
+      const clone = node.cloneNode(true);
+      if (!(clone instanceof Element)) {
+        return '';
+      }
+
+      for (const button of clone.querySelectorAll(SELECTORS.seeMoreButton)) {
+        const label = readTrimmedText(button);
+        if (SEE_MORE_PATTERNS.some((pattern) => pattern.test(label))) {
+          button.remove();
+        }
+      }
+
+      return readTrimmedText(clone);
+    })
     .filter((value) => value.length > 0);
 
   if (textBlocks.length === 0) {
@@ -160,7 +209,14 @@ function parseCommentDate(element: Element): {
   };
 }
 
-export function parseComment(element: Element): ParsedComment {
+export function parseComment(
+  element: Element,
+  context: ParsedCommentContext = {
+    commentId: null,
+    parentCommentId: null,
+    depth: 0,
+  },
+): ParsedComment {
   const warnings: CommentWarning[] = [];
   const author = parseCommentAuthor(element);
 
@@ -176,17 +232,21 @@ export function parseComment(element: Element): ParsedComment {
   const date = parseCommentDate(element);
   warnings.push(...date.warnings);
 
-  const reactionCount = parseCommentReactionCount(element);
-  if (reactionCount === null) {
+  const engagement = parseCommentEngagement(element);
+  if (engagement.reactionCount === null) {
     warnings.push('MISSING_REACTION_COUNT');
   }
 
   return {
+    commentId: context.commentId,
+    parentCommentId: context.parentCommentId,
+    depth: context.depth,
     author,
     text,
     displayedDate: date.displayedDate,
     publishedAt: date.publishedAt,
-    reactionCount,
+    reactionCount: engagement.reactionCount,
+    reactionBreakdown: engagement.reactionBreakdown,
     warnings,
   };
 }

@@ -118,10 +118,11 @@ function toPageInfo(response: ContentResponse): Result<PageInfo, string> {
 async function sendBeginCapture(
   tabId: number,
   mode: CaptureMode,
+  expandComments: boolean,
 ): Promise<Result<void, string>> {
   const response = await trySendTabRequest(
     tabId,
-    { type: 'BEGIN_CAPTURE', mode },
+    { type: 'BEGIN_CAPTURE', mode, expandComments },
     parseContentResponse,
   );
 
@@ -141,6 +142,7 @@ async function sendEndCapture(tabId: number): Promise<void> {
 async function handleStartCapture(
   tabId: number,
   mode: CaptureMode,
+  expandComments: boolean,
 ): Promise<BackgroundResponse> {
   await ensureIdentityKeysLoaded();
 
@@ -164,6 +166,7 @@ async function handleStartCapture(
     ...EMPTY_CAPTURE_SESSION,
     status: 'capturing',
     mode,
+    expandComments,
     tabId,
     groupUrl: pageInfo.value.groupUrl,
     groupName: pageInfo.value.groupName,
@@ -174,7 +177,7 @@ async function handleStartCapture(
 
   await writeCaptureSession(session);
 
-  const beginCapture = await sendBeginCapture(tabId, mode);
+  const beginCapture = await sendBeginCapture(tabId, mode, expandComments);
   if (!beginCapture.ok) {
     await writeCaptureSession(await refreshSessionCounts(EMPTY_CAPTURE_SESSION));
     return {
@@ -332,7 +335,11 @@ export async function handleBackgroundMessage(
       };
     }
     case 'START_CAPTURE':
-      return handleStartCapture(parsedRequest.tabId, parsedRequest.mode);
+      return handleStartCapture(
+        parsedRequest.tabId,
+        parsedRequest.mode,
+        parsedRequest.expandComments,
+      );
     case 'STOP_CAPTURE':
       return handleStopCapture();
     case 'CLEAR_DATA':

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Comment Expansion Group</title>
+  </head>
+  <body>
+    <h1 role="heading">Comment Expansion Group</h1>
+    <div role="feed">
+      <div data-focus="feed_story">
+        <h2><div role="button">Jane Doe</div></h2>
+        <a href="/groups/comment-expansion/posts/2001/" aria-label="1 hour ago">Post</a>
+        <div data-ad-preview="message" data-ad-rendering-role="story_message">
+          <div dir="auto">Post with expandable comments</div>
+        </div>
+        <div aria-label="Leave a comment" role="button" tabindex="0">
+          <div data-ad-rendering-role="comment_button"></div>
+          <div><span dir="auto">2</span></div>
+        </div>
+        <div id="comment-expander" role="button" tabindex="0">
+          <span dir="auto">View more comments</span>
+        </div>
+        <div id="comment-thread">
+          <div data-commentid="9001">
+            <div role="article" aria-label="Comment by Visible Author 30 minutes ago">
+              <div dir="auto">Visible comment</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      document.getElementById('comment-expander')?.addEventListener('click', () => {
+        document.getElementById('comment-expander')?.remove();
+        document.getElementById('comment-thread')?.insertAdjacentHTML(
+          'beforeend',
+          `
+            <div data-commentid="9002">
+              <div role="article" aria-label="Comment by Hidden Author 20 minutes ago">
+                <div dir="auto">Hidden comment revealed after expansion</div>
+              </div>
+            </div>
+          `,
+        );
+      });
+    </script>
+  </body>
+</html>

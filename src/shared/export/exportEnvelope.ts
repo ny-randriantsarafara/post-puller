@@ -5,7 +5,7 @@ import {
   type PublicationWindow,
 } from '../stats/groupStats';
 
-export const EXPORT_SCHEMA_VERSION = 2;
+export const EXPORT_SCHEMA_VERSION = 3;
 
 export type { PublicationWindow };
 

@@ -66,14 +66,14 @@ function ensureAutoScroller(): AutoScroller {
   return autoScroller;
 }
 
-function beginCapture(mode: CaptureMode): void {
+function beginCapture(mode: CaptureMode, expandComments: boolean): void {
   const pageInfo = getGroupPageInfo();
   if (!pageInfo.isGroupPage) {
     return;
   }
 
   isCapturing = true;
-  ensureFeedObserver().start();
+  ensureFeedObserver().start({ expandComments });
 
   if (mode === 'auto') {
     ensureAutoScroller().start();
@@ -150,7 +150,7 @@ export function handleContentMessage(
       });
     }
     case 'BEGIN_CAPTURE':
-      beginCapture(parsedRequest.mode);
+      beginCapture(parsedRequest.mode, parsedRequest.expandComments);
       return Promise.resolve({
         type: 'CAPTURE_STATE',
         isCapturing: true,

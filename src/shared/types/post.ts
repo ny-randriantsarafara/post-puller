@@ -1,4 +1,5 @@
 import type { CapturedComment } from './comment';
+import type { ReactionBreakdown } from './reactions';
 import type { PostWarning } from './warnings';
 
 export type PostAuthor =
@@ -32,6 +33,9 @@ export type CapturedPost = {
   displayedDate: string | null;
   publishedAt: string | null;
   reactionCount: number | null;
+  reactionBreakdown: ReactionBreakdown;
+  commentCount: number | null;
+  shareCount: number | null;
   comments: CapturedComment[];
   attachments: Attachment[];
   capturedAt: string;

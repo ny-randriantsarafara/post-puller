@@ -6,6 +6,7 @@ import {
 } from '../shared/identity/postIdentity';
 import { isBetterCapturedPost } from '../shared/captureQuality';
 import { clickPostTextExpansionControls } from './expandPostText';
+import { clickCommentExpansionControls } from './expandComments';
 import { getGroupPageInfo } from './groupPage';
 import { parsePost } from './parsing/parsePost';
 import { SELECTORS } from './parsing/selectors';
@@ -19,7 +20,12 @@ const DEBOUNCE_MS = 400;
 export const MAX_FLUSH_WAIT_MS = 1000;
 const FEED_RECHECK_MS = 2000;
 const MAX_EXPANSION_CLICKS_PER_POST = 3;
+const MAX_COMMENT_EXPANSION_CLICKS_PER_POST = 3;
 const BATCH_SIZE = 20;
+
+export type FeedObserverStartOptions = {
+  expandComments?: boolean;
+};
 
 export type FeedObserverCallbacks = {
   onPostsCaptured: (posts: CapturedPost[]) => void;
@@ -31,10 +37,17 @@ type TruncatedPost = {
   identityKey: string;
 };
 
+type ExpandableCommentsPost = {
+  element: Element;
+  identityKey: string;
+};
+
 export class FeedObserver {
   private readonly callbacks: FeedObserverCallbacks;
   private readonly observedPosts = new WeakMap<Element, CapturedPost>();
   private readonly expansionClickCounts = new Map<string, number>();
+  private readonly commentExpansionClickCounts = new Map<string, number>();
+  private expandComments = false;
   private readonly pendingElements = new Set<Element>();
   private observer: MutationObserver | null = null;
   private observedFeedRoot: Element | null = null;
@@ -47,10 +60,12 @@ export class FeedObserver {
     this.callbacks = callbacks;
   }
 
-  start(): void {
+  start(options: FeedObserverStartOptions = {}): void {
     if (this.isActive) {
       return;
     }
+
+    this.expandComments = options.expandComments ?? false;
 
     const pageInfo = getGroupPageInfo();
     if (!pageInfo.isGroupPage || pageInfo.groupUrl === null) {
@@ -117,6 +132,7 @@ export class FeedObserver {
     }
 
     this.pendingElements.clear();
+    this.expandComments = false;
   }
 
   interrupt(): void {
@@ -227,6 +243,7 @@ export class FeedObserver {
 
     const capturedPosts: CapturedPost[] = [];
     const truncatedPosts: TruncatedPost[] = [];
+    const expandableCommentsPosts: ExpandableCommentsPost[] = [];
     const elements = [...this.pendingElements];
     this.pendingElements.clear();
 
@@ -242,6 +259,17 @@ export class FeedObserver {
 
       if (capturedPost.warnings.includes('TRUNCATED_TEXT')) {
         truncatedPosts.push({
+          element,
+          identityKey: capturedPost.identityKey,
+        });
+      }
+
+      if (
+        this.expandComments &&
+        (capturedPost.warnings.includes('COLLAPSED_COMMENTS') ||
+          capturedPost.warnings.includes('MISSING_COMMENTS'))
+      ) {
+        expandableCommentsPosts.push({
           element,
           identityKey: capturedPost.identityKey,
         });
@@ -265,6 +293,7 @@ export class FeedObserver {
     // our clicks. Each click mutates the feed, so the observer re-parses the
     // post and the longer text is emitted as a better version of the same post.
     this.expandTruncatedPosts(truncatedPosts);
+    this.expandCollapsedComments(expandableCommentsPosts);
   }
 
   // One unreadable post must not discard the whole batch, since the pending set
@@ -314,6 +343,24 @@ export class FeedObserver {
       if (clickCount > 0) {
         this.expansionClickCounts.set(
           truncatedPost.identityKey,
+          spentClicks + clickCount,
+        );
+      }
+    }
+  }
+
+  private expandCollapsedComments(expandablePosts: ExpandableCommentsPost[]): void {
+    for (const expandablePost of expandablePosts) {
+      const spentClicks =
+        this.commentExpansionClickCounts.get(expandablePost.identityKey) ?? 0;
+      const clickCount = clickCommentExpansionControls(
+        expandablePost.element,
+        MAX_COMMENT_EXPANSION_CLICKS_PER_POST - spentClicks,
+      );
+
+      if (clickCount > 0) {
+        this.commentExpansionClickCounts.set(
+          expandablePost.identityKey,
           spentClicks + clickCount,
         );
       }

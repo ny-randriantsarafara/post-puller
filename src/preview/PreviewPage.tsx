@@ -5,7 +5,8 @@ import {
   formatPublicationWindow,
   type GroupCaptureStats,
 } from '../shared/stats/groupStats';
-import type { CapturedPost } from '../shared/types';
+import type { CapturedPost, ReactionBreakdown } from '../shared/types';
+import { REACTION_TYPES } from '../shared/types';
 
 const PAGE_SIZE = 20;
 const ALL_GROUPS = 'all';
@@ -41,6 +42,36 @@ function formatGroupLabel(group: GroupCaptureStats['group']): string {
   }
 
   return 'Unknown group';
+}
+
+function formatReactionBreakdown(breakdown: ReactionBreakdown): string {
+  const parts = REACTION_TYPES.flatMap((reactionType) => {
+    const count = breakdown[reactionType];
+    if (count === undefined) {
+      return [];
+    }
+
+    return [`${reactionType} ${String(count)}`];
+  });
+
+  return parts.length > 0 ? parts.join(' · ') : 'No reaction breakdown';
+}
+
+function formatEngagementSummary(post: CapturedPost): string {
+  const reactionTotal = post.reactionCount ?? 0;
+  const commentTotal = post.commentCount ?? post.comments.length;
+  const shareTotal = post.shareCount;
+
+  const parts = [
+    `${String(reactionTotal)} reactions`,
+    `${String(commentTotal)} comments`,
+  ];
+
+  if (shareTotal !== null) {
+    parts.push(`${String(shareTotal)} shares`);
+  }
+
+  return parts.join(' · ');
 }
 
 export function PreviewPage() {
@@ -175,8 +206,9 @@ export function PreviewPage() {
               {post.displayedDate !== null && post.publishedAt !== null && (
                 <span> ({post.displayedDate})</span>
               )}{' '}
-              · {post.reactionCount ?? 0} reactions · {post.comments.length} comments
+              · {formatEngagementSummary(post)}
             </div>
+            <p className="post-card__reactions">{formatReactionBreakdown(post.reactionBreakdown)}</p>
             {post.postUrl !== null && (
               <a
                 className="post-card__link"
@@ -194,7 +226,11 @@ export function PreviewPage() {
             {post.comments.length > 0 && (
               <ul className="comment-list">
                 {post.comments.map((comment, index) => (
-                  <li key={`${post.identityKey}-comment-${String(index)}`} className="comment-list__item">
+                  <li
+                    key={comment.commentId ?? `${post.identityKey}-comment-${String(index)}`}
+                    className="comment-list__item"
+                    style={{ marginLeft: `${String(comment.depth * 16)}px` }}
+                  >
                     <strong>
                       {comment.author.kind === 'named'
                         ? comment.author.name

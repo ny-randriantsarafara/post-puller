@@ -72,9 +72,12 @@ async function readSessionStatus(): Promise<string> {
   return response.session.status;
 }
 
-function startCapture(mode: 'manual' | 'auto'): Promise<BackgroundResponse> {
+function startCapture(
+  mode: 'manual' | 'auto',
+  expandComments = false,
+): Promise<BackgroundResponse> {
   return handleBackgroundMessage(
-    { type: 'START_CAPTURE', tabId: SAMPLE_TAB_ID, mode },
+    { type: 'START_CAPTURE', tabId: SAMPLE_TAB_ID, mode, expandComments },
     {},
   );
 }
@@ -97,6 +100,9 @@ function createStoredPost(postId: string, groupUrl: string, groupName: string): 
     displayedDate: '1 hour ago',
     publishedAt: capturedAt,
     reactionCount: 1,
+    reactionBreakdown: {},
+    commentCount: null,
+    shareCount: null,
     comments: [],
     attachments: [{ kind: 'none' }],
     capturedAt,
@@ -178,6 +184,7 @@ describe('handleBackgroundMessage', () => {
     expect(sendMessage).toHaveBeenCalledWith(SAMPLE_TAB_ID, {
       type: 'BEGIN_CAPTURE',
       mode: 'auto',
+      expandComments: false,
     });
   });
 

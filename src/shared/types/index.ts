@@ -12,6 +12,8 @@ export type {
   CaptureStatus,
 } from './session';
 export { EMPTY_CAPTURE_SESSION } from './session';
+export type { ReactionBreakdown, ReactionType } from './reactions';
+export { REACTION_TYPES, sumReactionBreakdown } from './reactions';
 export type { CommentWarning, PostWarning } from './warnings';
 export { COMMENT_WARNINGS, POST_WARNINGS } from './warnings';
 export type { GroupCaptureStats, GroupStatsTotals, PublicationWindow } from '../stats/groupStats';
