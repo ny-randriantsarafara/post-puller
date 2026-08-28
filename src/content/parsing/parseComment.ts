@@ -1,5 +1,9 @@
 import type { CommentWarning, PostAuthor, ReactionBreakdown } from '../../shared/types';
 import {
+  DEFAULT_CAPTURE_OPTIONS,
+  type CaptureOptions,
+} from '../../shared/types/captureOptions';
+import {
   detectRelativeDateLocale,
   parseRelativeDate,
 } from '../../shared/time/relativeDate';
@@ -216,6 +220,7 @@ export function parseComment(
     parentCommentId: null,
     depth: 0,
   },
+  options: CaptureOptions = DEFAULT_CAPTURE_OPTIONS,
 ): ParsedComment {
   const warnings: CommentWarning[] = [];
   const author = parseCommentAuthor(element);
@@ -232,8 +237,8 @@ export function parseComment(
   const date = parseCommentDate(element);
   warnings.push(...date.warnings);
 
-  const engagement = parseCommentEngagement(element);
-  if (engagement.reactionCount === null) {
+  const engagement = parseCommentEngagement(element, options.captureReactions);
+  if (options.captureReactions && engagement.reactionCount === null) {
     warnings.push('MISSING_REACTION_COUNT');
   }
 

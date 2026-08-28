@@ -108,11 +108,24 @@ function parseAggregateReactionCount(searchRoot: Element): number | null {
   return null;
 }
 
-export function parseEngagement(searchRoot: Element): ParsedEngagement {
-  const reactionBreakdown = parseReactionBreakdown(searchRoot);
-  const reactionCountFromFooter = readFooterCounter(searchRoot, 'like_button');
+export function parseEngagement(
+  searchRoot: Element,
+  captureReactions = true,
+): ParsedEngagement {
   const commentCount = readFooterCounter(searchRoot, 'comment_button');
   const shareCount = readFooterCounter(searchRoot, 'share_button');
+
+  if (!captureReactions) {
+    return {
+      reactionCount: null,
+      reactionBreakdown: {},
+      commentCount,
+      shareCount,
+    };
+  }
+
+  const reactionBreakdown = parseReactionBreakdown(searchRoot);
+  const reactionCountFromFooter = readFooterCounter(searchRoot, 'like_button');
 
   let reactionCount = reactionCountFromFooter;
   if (reactionCount === null) {
@@ -132,10 +145,20 @@ export function parseEngagement(searchRoot: Element): ParsedEngagement {
   };
 }
 
-export function parseCommentEngagement(commentElement: Element): {
+export function parseCommentEngagement(
+  commentElement: Element,
+  captureReactions = true,
+): {
   reactionCount: number | null;
   reactionBreakdown: ReactionBreakdown;
 } {
+  if (!captureReactions) {
+    return {
+      reactionCount: null,
+      reactionBreakdown: {},
+    };
+  }
+
   const reactionBreakdown = parseReactionBreakdown(commentElement);
   let reactionCount: number | null = null;
 

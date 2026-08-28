@@ -51,7 +51,7 @@ Then load the extension from the `dist` folder created by Vite.
 1. Open a Facebook group page such as `https://www.facebook.com/groups/your-group`
 2. Click the extension icon
 3. Choose **Manual scan** or **Automatic scan**
-4. Optionally enable **Expand comments while capturing (slower)**
+4. Adjust the **Capture options** checkboxes if needed
 5. Click **Start capture**
 6. Scroll the group feed yourself, or let automatic scan do it
 7. Click **Stop capture** when finished
@@ -69,6 +69,24 @@ everything.
 The preview page opens with the same per-group summary, a group filter for the post list,
 and export that respects the selected group.
 
+### Capture options
+
+All three options are configured in the popup before you start capture. A running session
+keeps the options it started with.
+
+**Expand post text while capturing** (on by default) clicks **See more** / **Voir plus**
+inside post messages. When off, truncated posts are still stored with a `TRUNCATED_TEXT`
+warning, but the extension does not click to reveal more text.
+
+**Expand comments while capturing** (off by default) clicks **View more comments**,
+**View more answers**, and **View N replies** up to three times per post. When off, only
+the comments Facebook already rendered in the feed are stored.
+
+**Capture reactions** (on by default) stores reaction totals and the visible per-type
+breakdown from the feed toolbar. When off, reaction fields stay empty and posts are not
+flagged with `MISSING_REACTION_COUNT` or `PARTIAL_REACTION_BREAKDOWN`. Comment and share
+counts are still read from the post footer.
+
 ### Scan modes
 
 **Manual scan** only watches the feed: you scroll.
@@ -78,11 +96,6 @@ seconds. The pace is deliberate: Facebook deletes a post from the page as soon a
 the viewport, and capture needs up to a second to store what is on screen, so scrolling any
 faster loses posts. Auto-scroll pauses while the tab is hidden, because Chrome throttles
 timers in background tabs, so keep the group tab visible.
-
-**Expand comments while capturing** clicks **View more comments**, **View more answers**,
-and **View N replies** up to three times per post. It only expands what Facebook has already
-rendered behind those buttons; it does not open the full comment dialog or fetch unloaded
-threads.
 
 Auto-scroll stops on its own once four steps in a row neither move the page nor make it
 longer, which means the feed has stopped loading. Capture keeps running after that, so
@@ -167,12 +180,11 @@ them an ID.
 
 ## Incomplete data warnings
 
-The extension only works with posts Facebook has already rendered in the DOM. It clicks
-text-only **See more** / **Voir plus** controls inside post message containers. With
-**Expand comments while capturing** enabled, it also clicks comment and reply expanders a
-bounded number of times per post. It does not navigate to post pages or download media
-files. Controls nested in a link are never clicked, because navigating away would interrupt
-the session.
+The extension only works with posts Facebook has already rendered in the DOM. With the
+capture options enabled, it clicks text-only **See more** / **Voir plus** controls inside
+post message containers and bounded comment expanders. It does not navigate to post pages or
+download media files. Controls nested in a link are never clicked, because navigating away
+would interrupt the session.
 
 A post is always saved with the text available at capture time, and expansion is a
 follow-up: when a click reveals more text, the post is saved again under the same

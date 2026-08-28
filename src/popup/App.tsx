@@ -10,8 +10,9 @@ import {
   sumGroupStats,
 } from '../shared/stats/groupStats';
 import type { CaptureMode, CaptureSession } from '../shared/types';
+import { DEFAULT_CAPTURE_OPTIONS, type CaptureOptions } from '../shared/types';
 import { EMPTY_CAPTURE_SESSION } from '../shared/types';
-import { ExpandCommentsOption } from './components/ExpandCommentsOption';
+import { CaptureOptionsPanel } from './components/CaptureOptionsPanel';
 import { GroupStatsList } from './components/GroupStatsList';
 import { MetricCard } from './components/MetricCard';
 import { ScanModeSelector } from './components/ScanModeSelector';
@@ -73,15 +74,15 @@ function resolveSelectedMode(
   return requestedMode;
 }
 
-function resolveSelectedExpandComments(
+function resolveSelectedOptions(
   session: CaptureSession,
-  requestedExpandComments: boolean,
-): boolean {
+  requestedOptions: CaptureOptions,
+): CaptureOptions {
   if (session.status === 'capturing') {
-    return session.expandComments;
+    return session.options;
   }
 
-  return requestedExpandComments;
+  return requestedOptions;
 }
 
 async function queryActiveTabId(): Promise<number | null> {
@@ -97,7 +98,9 @@ async function queryActiveTabId(): Promise<number | null> {
 export function App() {
   const [session, setSession] = useState<CaptureSession>(EMPTY_CAPTURE_SESSION);
   const [requestedMode, setRequestedMode] = useState<CaptureMode>('manual');
-  const [requestedExpandComments, setRequestedExpandComments] = useState(false);
+  const [requestedOptions, setRequestedOptions] = useState<CaptureOptions>(
+    DEFAULT_CAPTURE_OPTIONS,
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -160,7 +163,7 @@ export function App() {
       type: 'START_CAPTURE',
       tabId,
       mode: requestedMode,
-      expandComments: requestedExpandComments,
+      options: requestedOptions,
     });
   };
 
@@ -206,10 +209,7 @@ export function App() {
   const autoScrollMessage = getAutoScrollMessage(session);
   const isCapturing = session.status === 'capturing';
   const selectedMode = resolveSelectedMode(session, requestedMode);
-  const selectedExpandComments = resolveSelectedExpandComments(
-    session,
-    requestedExpandComments,
-  );
+  const selectedOptions = resolveSelectedOptions(session, requestedOptions);
   const totals = sumGroupStats(session.groupStats);
   const activeGroupStats = findGroupStats(session.groupStats, session.groupUrl);
   const activeGroupLabel = getActiveGroupLabel(session);
@@ -246,10 +246,10 @@ export function App() {
         onModeChange={setRequestedMode}
       />
 
-      <ExpandCommentsOption
-        expandComments={selectedExpandComments}
+      <CaptureOptionsPanel
+        options={selectedOptions}
         isDisabled={isBusy || isCapturing}
-        onExpandCommentsChange={setRequestedExpandComments}
+        onOptionsChange={setRequestedOptions}
       />
 
       {autoScrollMessage !== null && (

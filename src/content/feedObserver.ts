@@ -1,4 +1,8 @@
 import type { CapturedPost, GroupInfo } from '../shared/types';
+import {
+  DEFAULT_CAPTURE_OPTIONS,
+  type CaptureOptions,
+} from '../shared/types/captureOptions';
 import { toErrorMessage } from '../shared/errorMessage';
 import {
   finalizeCapturedPost,
@@ -24,7 +28,7 @@ const MAX_COMMENT_EXPANSION_CLICKS_PER_POST = 3;
 const BATCH_SIZE = 20;
 
 export type FeedObserverStartOptions = {
-  expandComments?: boolean;
+  options?: CaptureOptions;
 };
 
 export type FeedObserverCallbacks = {
@@ -47,7 +51,7 @@ export class FeedObserver {
   private readonly observedPosts = new WeakMap<Element, CapturedPost>();
   private readonly expansionClickCounts = new Map<string, number>();
   private readonly commentExpansionClickCounts = new Map<string, number>();
-  private expandComments = false;
+  private captureOptions: CaptureOptions = DEFAULT_CAPTURE_OPTIONS;
   private readonly pendingElements = new Set<Element>();
   private observer: MutationObserver | null = null;
   private observedFeedRoot: Element | null = null;
@@ -65,7 +69,7 @@ export class FeedObserver {
       return;
     }
 
-    this.expandComments = options.expandComments ?? false;
+    this.captureOptions = options.options ?? DEFAULT_CAPTURE_OPTIONS;
 
     const pageInfo = getGroupPageInfo();
     if (!pageInfo.isGroupPage || pageInfo.groupUrl === null) {
@@ -132,7 +136,7 @@ export class FeedObserver {
     }
 
     this.pendingElements.clear();
-    this.expandComments = false;
+    this.captureOptions = DEFAULT_CAPTURE_OPTIONS;
   }
 
   interrupt(): void {
@@ -257,7 +261,10 @@ export class FeedObserver {
         continue;
       }
 
-      if (capturedPost.warnings.includes('TRUNCATED_TEXT')) {
+      if (
+        capturedPost.warnings.includes('TRUNCATED_TEXT') &&
+        this.captureOptions.expandPostText
+      ) {
         truncatedPosts.push({
           element,
           identityKey: capturedPost.identityKey,
@@ -265,7 +272,7 @@ export class FeedObserver {
       }
 
       if (
-        this.expandComments &&
+        this.captureOptions.expandComments &&
         (capturedPost.warnings.includes('COLLAPSED_COMMENTS') ||
           capturedPost.warnings.includes('MISSING_COMMENTS'))
       ) {
@@ -303,7 +310,7 @@ export class FeedObserver {
     group: GroupInfo,
   ): Promise<CapturedPost | null> {
     try {
-      const draft = parsePost(element, group);
+      const draft = parsePost(element, group, this.captureOptions);
       const finalizedPost = await finalizeCapturedPost(
         draft,
         element,

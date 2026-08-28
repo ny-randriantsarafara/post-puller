@@ -6,7 +6,7 @@ import {
   type GroupCaptureStats,
 } from '../shared/stats/groupStats';
 import type { CapturedPost, ReactionBreakdown } from '../shared/types';
-import { REACTION_TYPES } from '../shared/types';
+import { REACTION_TYPES, sumReactionBreakdown } from '../shared/types';
 
 const PAGE_SIZE = 20;
 const ALL_GROUPS = 'all';
@@ -58,14 +58,16 @@ function formatReactionBreakdown(breakdown: ReactionBreakdown): string {
 }
 
 function formatEngagementSummary(post: CapturedPost): string {
-  const reactionTotal = post.reactionCount ?? 0;
   const commentTotal = post.commentCount ?? post.comments.length;
   const shareTotal = post.shareCount;
 
-  const parts = [
-    `${String(reactionTotal)} reactions`,
-    `${String(commentTotal)} comments`,
-  ];
+  const parts: string[] = [];
+
+  if (post.reactionCount !== null) {
+    parts.push(`${String(post.reactionCount)} reactions`);
+  }
+
+  parts.push(`${String(commentTotal)} comments`);
 
   if (shareTotal !== null) {
     parts.push(`${String(shareTotal)} shares`);
@@ -208,7 +210,11 @@ export function PreviewPage() {
               )}{' '}
               · {formatEngagementSummary(post)}
             </div>
-            <p className="post-card__reactions">{formatReactionBreakdown(post.reactionBreakdown)}</p>
+            {sumReactionBreakdown(post.reactionBreakdown) > 0 && (
+              <p className="post-card__reactions">
+                {formatReactionBreakdown(post.reactionBreakdown)}
+              </p>
+            )}
             {post.postUrl !== null && (
               <a
                 className="post-card__link"

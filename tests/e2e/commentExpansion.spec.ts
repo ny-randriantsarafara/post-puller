@@ -5,6 +5,7 @@ import {
   parseBackgroundResponse,
   type BackgroundResponse,
 } from '../../src/shared/messaging/protocol';
+import { DEFAULT_CAPTURE_OPTIONS } from '../../src/shared/types';
 
 const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'comment-expansion-page.html');
@@ -132,7 +133,10 @@ test('captures hidden comments only when comment expansion is enabled', async ()
     type: 'START_CAPTURE',
     tabId,
     mode: 'manual',
-    expandComments: false,
+    options: {
+      ...DEFAULT_CAPTURE_OPTIONS,
+      expandComments: false,
+    },
   });
   expect(withoutExpansion.type).toBe('SUCCESS');
 
@@ -147,7 +151,10 @@ test('captures hidden comments only when comment expansion is enabled', async ()
     type: 'START_CAPTURE',
     tabId,
     mode: 'manual',
-    expandComments: true,
+    options: {
+      ...DEFAULT_CAPTURE_OPTIONS,
+      expandComments: true,
+    },
   });
   expect(withExpansion.type).toBe('SUCCESS');
 

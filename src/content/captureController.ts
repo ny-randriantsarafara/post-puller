@@ -1,4 +1,5 @@
 import type { CaptureMode, CapturedPost } from '../shared/types';
+import type { CaptureOptions } from '../shared/types/captureOptions';
 import {
   parseContentRequest,
   type BackgroundRequest,
@@ -66,14 +67,14 @@ function ensureAutoScroller(): AutoScroller {
   return autoScroller;
 }
 
-function beginCapture(mode: CaptureMode, expandComments: boolean): void {
+function beginCapture(mode: CaptureMode, options: CaptureOptions): void {
   const pageInfo = getGroupPageInfo();
   if (!pageInfo.isGroupPage) {
     return;
   }
 
   isCapturing = true;
-  ensureFeedObserver().start({ expandComments });
+  ensureFeedObserver().start({ options });
 
   if (mode === 'auto') {
     ensureAutoScroller().start();
@@ -150,7 +151,7 @@ export function handleContentMessage(
       });
     }
     case 'BEGIN_CAPTURE':
-      beginCapture(parsedRequest.mode, parsedRequest.expandComments);
+      beginCapture(parsedRequest.mode, parsedRequest.options);
       return Promise.resolve({
         type: 'CAPTURE_STATE',
         isCapturing: true,

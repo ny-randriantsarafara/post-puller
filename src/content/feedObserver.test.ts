@@ -192,6 +192,29 @@ describe('FeedObserver', () => {
     expect(capturedTexts).toContain('Truncated text, now shown in full');
   });
 
+  it('does not click See more when expandPostText is disabled', async () => {
+    renderFeed('Truncated text…');
+    const capturedBatches: CapturedPost[][] = [];
+    const observer = new FeedObserver({
+      onPostsCaptured: (posts) => capturedBatches.push(posts),
+      onInterrupted: () => undefined,
+    });
+
+    observer.start({
+      options: {
+        expandPostText: false,
+        expandComments: false,
+        captureReactions: true,
+      },
+    });
+    await vi.advanceTimersByTimeAsync(FLUSH_MS + 500);
+    observer.stop();
+
+    const seeMoreButton = readPostElement().querySelector('[role="button"]');
+    expect(seeMoreButton?.textContent).toBe('See more');
+    expect(capturedBatches.flat()[0]?.text).toBe('Truncated text…');
+  });
+
   it('keeps capturing after Facebook replaces the feed container', async () => {
     renderFeed('First post');
     const capturedBatches: CapturedPost[][] = [];

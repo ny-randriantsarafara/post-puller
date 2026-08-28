@@ -65,4 +65,14 @@ describe('parseEngagement', () => {
     expect(engagement.reactionCount).toBe(375);
     expect(engagement.reactionBreakdown).toEqual({ like: 375 });
   });
+
+  it('skips reaction parsing when captureReactions is disabled', () => {
+    const postElement = loadFixture('post-with-reaction-breakdown.html');
+    const engagement = parseEngagement(postElement, false);
+
+    expect(engagement.reactionCount).toBeNull();
+    expect(engagement.reactionBreakdown).toEqual({});
+    expect(engagement.commentCount).toBe(22);
+    expect(engagement.shareCount).toBe(2);
+  });
 });

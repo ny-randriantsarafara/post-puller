@@ -98,6 +98,39 @@ export const capturedPostSchema = z.object({
 
 export const captureModeSchema = z.enum(['manual', 'auto']);
 
+export const captureOptionsSchema = z
+  .object({
+    expandPostText: z.boolean().default(true),
+    expandComments: z.boolean().default(false),
+    captureReactions: z.boolean().default(true),
+  })
+  .default({
+    expandPostText: true,
+    expandComments: false,
+    captureReactions: true,
+  });
+
+// Sessions stored before capture options existed only had expandComments.
+function migrateLegacySession(value: unknown): unknown {
+  if (typeof value !== 'object' || value === null) {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (record['options'] !== undefined) {
+    return value;
+  }
+
+  return {
+    ...record,
+    options: {
+      expandPostText: true,
+      expandComments: record['expandComments'] === true,
+      captureReactions: true,
+    },
+  };
+}
+
 const publicationWindowSchema = z.object({
   earliest: z.string().nullable(),
   latest: z.string().nullable(),
@@ -115,11 +148,10 @@ export const groupCaptureStatsSchema = z.object({
   lastCapturedAt: z.string(),
 });
 
-export const captureSessionSchema = z.object({
+const captureSessionFieldsSchema = z.object({
   status: z.enum(['idle', 'capturing', 'interrupted']),
-  // Defaulted so a session stored before the scan modes existed still reads back.
   mode: captureModeSchema.default('manual'),
-  expandComments: z.boolean().default(false),
+  options: captureOptionsSchema,
   autoScrollCompletedAt: z.string().nullable().default(null),
   tabId: z.number().nullable(),
   groupUrl: z.string().nullable(),
@@ -127,9 +159,13 @@ export const captureSessionSchema = z.object({
   startedAt: z.string().nullable(),
   stoppedAt: z.string().nullable(),
   interruptedAt: z.string().nullable(),
-  // Defaulted so sessions stored before per-group stats existed still read back.
   groupStats: z.array(groupCaptureStatsSchema).default([]),
 });
+
+export const captureSessionSchema = z.preprocess(
+  migrateLegacySession,
+  captureSessionFieldsSchema,
+);
 
 export const backgroundRequestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('GET_SESSION') }),
@@ -137,7 +173,7 @@ export const backgroundRequestSchema = z.discriminatedUnion('type', [
     type: z.literal('START_CAPTURE'),
     tabId: z.number(),
     mode: captureModeSchema,
-    expandComments: z.boolean().default(false),
+    options: captureOptionsSchema,
   }),
   z.object({ type: z.literal('STOP_CAPTURE') }),
   z.object({ type: z.literal('CLEAR_DATA') }),
@@ -170,7 +206,7 @@ export const contentRequestSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('BEGIN_CAPTURE'),
     mode: captureModeSchema,
-    expandComments: z.boolean().default(false),
+    options: captureOptionsSchema,
   }),
   z.object({ type: z.literal('END_CAPTURE') }),
   z.object({ type: z.literal('GET_PAGE_INFO') }),

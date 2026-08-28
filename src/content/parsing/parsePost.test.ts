@@ -203,4 +203,18 @@ describe('parsePost', () => {
     expect(parsed.warnings).toContain('MISSING_COMMENTS');
     expect(parsed.warnings).toContain('COLLAPSED_COMMENTS');
   });
+
+  it('does not emit reaction warnings when captureReactions is disabled', () => {
+    const postElement = loadFixture('post-with-reaction-breakdown.html');
+    const parsed = parsePost(postElement, group, {
+      expandPostText: true,
+      expandComments: false,
+      captureReactions: false,
+    });
+
+    expect(parsed.reactionCount).toBeNull();
+    expect(parsed.reactionBreakdown).toEqual({});
+    expect(parsed.warnings).not.toContain('MISSING_REACTION_COUNT');
+    expect(parsed.warnings).not.toContain('PARTIAL_REACTION_BREAKDOWN');
+  });
 });

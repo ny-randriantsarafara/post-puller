@@ -7,6 +7,7 @@ import {
 import { clearPosts, upsertPosts } from '../shared/storage/postRepository';
 import { sumGroupStats } from '../shared/stats/groupStats';
 import type { CapturedPost } from '../shared/types';
+import { DEFAULT_CAPTURE_OPTIONS, type CaptureOptions } from '../shared/types';
 import { handleBackgroundMessage } from './captureCoordinator';
 
 const CONNECTION_ERROR = 'Could not establish connection. Receiving end does not exist.';
@@ -74,10 +75,10 @@ async function readSessionStatus(): Promise<string> {
 
 function startCapture(
   mode: 'manual' | 'auto',
-  expandComments = false,
+  options: CaptureOptions = DEFAULT_CAPTURE_OPTIONS,
 ): Promise<BackgroundResponse> {
   return handleBackgroundMessage(
-    { type: 'START_CAPTURE', tabId: SAMPLE_TAB_ID, mode, expandComments },
+    { type: 'START_CAPTURE', tabId: SAMPLE_TAB_ID, mode, options },
     {},
   );
 }
@@ -184,7 +185,7 @@ describe('handleBackgroundMessage', () => {
     expect(sendMessage).toHaveBeenCalledWith(SAMPLE_TAB_ID, {
       type: 'BEGIN_CAPTURE',
       mode: 'auto',
-      expandComments: false,
+      options: DEFAULT_CAPTURE_OPTIONS,
     });
   });
 

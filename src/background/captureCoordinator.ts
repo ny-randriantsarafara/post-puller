@@ -6,6 +6,7 @@ import {
   upsertPosts,
 } from '../shared/storage/postRepository';
 import type { CaptureMode, CaptureSession } from '../shared/types';
+import type { CaptureOptions } from '../shared/types/captureOptions';
 import { EMPTY_CAPTURE_SESSION } from '../shared/types';
 import {
   parseBackgroundRequest,
@@ -118,11 +119,11 @@ function toPageInfo(response: ContentResponse): Result<PageInfo, string> {
 async function sendBeginCapture(
   tabId: number,
   mode: CaptureMode,
-  expandComments: boolean,
+  options: CaptureOptions,
 ): Promise<Result<void, string>> {
   const response = await trySendTabRequest(
     tabId,
-    { type: 'BEGIN_CAPTURE', mode, expandComments },
+    { type: 'BEGIN_CAPTURE', mode, options },
     parseContentResponse,
   );
 
@@ -142,7 +143,7 @@ async function sendEndCapture(tabId: number): Promise<void> {
 async function handleStartCapture(
   tabId: number,
   mode: CaptureMode,
-  expandComments: boolean,
+  options: CaptureOptions,
 ): Promise<BackgroundResponse> {
   await ensureIdentityKeysLoaded();
 
@@ -166,7 +167,7 @@ async function handleStartCapture(
     ...EMPTY_CAPTURE_SESSION,
     status: 'capturing',
     mode,
-    expandComments,
+    options,
     tabId,
     groupUrl: pageInfo.value.groupUrl,
     groupName: pageInfo.value.groupName,
@@ -177,7 +178,7 @@ async function handleStartCapture(
 
   await writeCaptureSession(session);
 
-  const beginCapture = await sendBeginCapture(tabId, mode, expandComments);
+  const beginCapture = await sendBeginCapture(tabId, mode, options);
   if (!beginCapture.ok) {
     await writeCaptureSession(await refreshSessionCounts(EMPTY_CAPTURE_SESSION));
     return {
@@ -338,7 +339,7 @@ export async function handleBackgroundMessage(
       return handleStartCapture(
         parsedRequest.tabId,
         parsedRequest.mode,
-        parsedRequest.expandComments,
+        parsedRequest.options,
       );
     case 'STOP_CAPTURE':
       return handleStopCapture();

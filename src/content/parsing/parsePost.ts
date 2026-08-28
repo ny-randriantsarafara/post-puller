@@ -1,4 +1,5 @@
 import type { GroupInfo, ParsedPostDraft, PostAuthor, PostWarning } from '../../shared/types';
+import { DEFAULT_CAPTURE_OPTIONS, type CaptureOptions } from '../../shared/types/captureOptions';
 import { isPartialReactionBreakdown } from '../../shared/types/reactions';
 import {
   buildGroupPostUrl,
@@ -418,7 +419,10 @@ function resolveCommentContext(
   };
 }
 
-function parseVisibleComments(postElement: Element): ParsedPostDraft['comments'] {
+function parseVisibleComments(
+  postElement: Element,
+  options: CaptureOptions,
+): ParsedPostDraft['comments'] {
   const commentArticles = [...postElement.querySelectorAll(SELECTORS.commentArticle)];
   const nestedArticles =
     commentArticles.length > 0
@@ -440,7 +444,7 @@ function parseVisibleComments(postElement: Element): ParsedPostDraft['comments']
       seenCommentIds.add(context.commentId);
     }
 
-    comments.push(parseComment(commentElement, context));
+    comments.push(parseComment(commentElement, context, options));
   }
 
   return comments;
@@ -449,6 +453,7 @@ function parseVisibleComments(postElement: Element): ParsedPostDraft['comments']
 export function parsePost(
   postElement: Element,
   group: GroupInfo,
+  options: CaptureOptions = DEFAULT_CAPTURE_OPTIONS,
 ): ParsedPostDraft {
   const warnings: PostWarning[] = [];
   const rawPostUrl = findPostLink(postElement);
@@ -461,9 +466,9 @@ export function parsePost(
   const author = parsePostAuthor(postElement);
   const text = parsePostText(postElement);
   const date = parsePostDate(postElement);
-  const engagement = parseEngagement(postElement);
+  const engagement = parseEngagement(postElement, options.captureReactions);
   const attachment = parseAttachment(postElement);
-  const comments = parseVisibleComments(postElement);
+  const comments = parseVisibleComments(postElement, options);
 
   warnings.push(...date.warnings);
 
@@ -487,11 +492,12 @@ export function parsePost(
     warnings.push('TRUNCATED_TEXT');
   }
 
-  if (engagement.reactionCount === null) {
+  if (options.captureReactions && engagement.reactionCount === null) {
     warnings.push('MISSING_REACTION_COUNT');
   }
 
   if (
+    options.captureReactions &&
     isPartialReactionBreakdown(
       engagement.reactionBreakdown,
       engagement.reactionCount,

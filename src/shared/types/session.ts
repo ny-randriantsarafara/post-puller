@@ -1,3 +1,5 @@
+import type { CaptureOptions } from './captureOptions';
+import { DEFAULT_CAPTURE_OPTIONS } from './captureOptions';
 import type { GroupCaptureStats } from '../stats/groupStats';
 
 export type CaptureStatus = 'idle' | 'capturing' | 'interrupted';
@@ -7,7 +9,7 @@ export type CaptureMode = 'manual' | 'auto';
 export type CaptureSession = {
   status: CaptureStatus;
   mode: CaptureMode;
-  expandComments: boolean;
+  options: CaptureOptions;
   // Set when auto-scroll gave up because the feed stopped yielding new content.
   // Capture keeps running, so anything Facebook loads afterwards is still stored.
   autoScrollCompletedAt: string | null;
@@ -23,7 +25,7 @@ export type CaptureSession = {
 export const EMPTY_CAPTURE_SESSION: CaptureSession = {
   status: 'idle',
   mode: 'manual',
-  expandComments: false,
+  options: DEFAULT_CAPTURE_OPTIONS,
   autoScrollCompletedAt: null,
   tabId: null,
   groupUrl: null,

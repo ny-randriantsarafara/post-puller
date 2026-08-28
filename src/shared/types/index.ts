@@ -6,6 +6,8 @@ export type {
   IdentitySource,
   ParsedPostDraft,
 } from './post';
+export type { CaptureOptions } from './captureOptions';
+export { DEFAULT_CAPTURE_OPTIONS } from './captureOptions';
 export type {
   CaptureMode,
   CaptureSession,

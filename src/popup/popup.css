@@ -112,21 +112,42 @@ body {
   color: #65676b;
 }
 
-.popup__option {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.popup__options {
+  margin: 0;
   padding: 10px;
+  border: none;
   border-radius: 8px;
   background: #fff;
-  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.popup__option-label {
+.popup__options-legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.popup__options-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  align-items: center;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.popup__options-row input {
+  grid-row: span 2;
+  margin: 0;
+}
+
+.popup__options-label {
   font-weight: 600;
 }
 
-.popup__option-hint {
+.popup__options-hint {
   font-size: 11px;
   color: #65676b;
 }
