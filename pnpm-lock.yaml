@@ -74,6 +74,9 @@ importers:
       fake-indexeddb:
         specifier: ^6.0.1
         version: 6.2.5
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@extractor/eslint-config':
         specifier: workspace:*
