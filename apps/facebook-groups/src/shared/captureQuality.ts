@@ -97,11 +97,11 @@ export function isBetterCapturedPost(
     return true;
   }
 
-  if (existingPost.postId === null && incomingPost.postId !== null) {
+  if (existingPost.externalId === null && incomingPost.externalId !== null) {
     return true;
   }
 
-  if (existingPost.postUrl === null && incomingPost.postUrl !== null) {
+  if (existingPost.externalUrl === null && incomingPost.externalUrl !== null) {
     return true;
   }
 

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  clearGroupPosts,
+  clearCollectionPosts,
   clearPosts,
   countPosts,
   isBetterParse,
   listAllPosts,
-  listGroupStats,
+  listCollectionStats,
   listPostsPage,
   upsertPosts,
 } from './postRepository';
@@ -17,11 +17,11 @@ function createSamplePost(index: number, warnings: CapturedPost['warnings'] = []
 
   return {
     identityKey: `postId:${identity}`,
-    identitySource: 'postId',
+    identitySource: 'externalId',
     fingerprint: null,
-    postId: identity,
-    postUrl: `https://www.facebook.com/groups/sample-group/permalink/${identity}`,
-    group: {
+    externalId: identity,
+    externalUrl: `https://www.facebook.com/groups/sample-group/permalink/${identity}`,
+    collection: {
       name: 'Sample Group',
       url: 'https://www.facebook.com/groups/sample-group',
     },
@@ -52,8 +52,8 @@ function createHashIdentityPost(overrides: Partial<CapturedPost>): CapturedPost 
     identityKey: 'contentHash:first-sighting',
     identitySource: 'contentHash',
     fingerprint: 'fingerprint-of-the-opening-line',
-    postId: null,
-    postUrl: null,
+    externalId: null,
+    externalUrl: null,
     text: `${LONG_TEXT.slice(0, 62)}…`,
     displayedDate: '1 hour ago',
     ...overrides,
@@ -111,8 +111,8 @@ describe('postRepository', () => {
       ...createSamplePost(6),
       identityKey: emptyStoryKey,
       identitySource: 'contentHash',
-      postId: null,
-      postUrl: null,
+      externalId: null,
+      externalUrl: null,
       author: { kind: 'unknown' },
       text: null,
       displayedDate: null,
@@ -123,7 +123,7 @@ describe('postRepository', () => {
 
     const storedPosts = await listAllPosts();
     expect(storedPosts).toHaveLength(1);
-    expect(storedPosts[0]?.postId).toBe('7');
+    expect(storedPosts[0]?.externalId).toBe('7');
   });
 
   it('recognises a post whose date label and text changed between two sightings', async () => {
@@ -166,16 +166,16 @@ describe('postRepository', () => {
     await upsertPosts([
       createHashIdentityPost({
         identityKey: 'postId:2001',
-        identitySource: 'postId',
-        postId: '2001',
-        postUrl: 'https://www.facebook.com/groups/sample-group/posts/2001/',
+        identitySource: 'externalId',
+        externalId: '2001',
+        externalUrl: 'https://www.facebook.com/groups/sample-group/posts/2001/',
       }),
     ]);
 
     const storedPosts = await listAllPosts();
     expect(storedPosts).toHaveLength(1);
     expect(storedPosts[0]?.identityKey).toBe('postId:2001');
-    expect(storedPosts[0]?.identitySource).toBe('postId');
+    expect(storedPosts[0]?.identitySource).toBe('externalId');
   });
 
   it('keeps two posts that share an opening line but disagree on their Facebook id', async () => {
@@ -184,13 +184,13 @@ describe('postRepository', () => {
     await upsertPosts([
       createHashIdentityPost({
         identityKey: 'postId:3001',
-        identitySource: 'postId',
-        postId: '3001',
+        identitySource: 'externalId',
+        externalId: '3001',
       }),
       createHashIdentityPost({
         identityKey: 'postId:3002',
-        identitySource: 'postId',
-        postId: '3002',
+        identitySource: 'externalId',
+        externalId: '3002',
       }),
     ]);
 
@@ -272,19 +272,19 @@ describe('postRepository', () => {
       createSamplePost(1),
       {
         ...createSamplePost(2),
-        group: {
+        collection: {
           name: 'Other Group',
           url: 'https://www.facebook.com/groups/other-group',
         },
-        postUrl: 'https://www.facebook.com/groups/other-group/permalink/2',
+        externalUrl: 'https://www.facebook.com/groups/other-group/permalink/2',
       },
     ]);
 
-    const groupStats = await listGroupStats();
+    const collectionStats = await listCollectionStats();
 
-    expect(groupStats).toHaveLength(2);
-    expect(groupStats.find((stat) => stat.group.name === 'Sample Group')?.postCount).toBe(1);
-    expect(groupStats.find((stat) => stat.group.name === 'Other Group')?.postCount).toBe(1);
+    expect(collectionStats).toHaveLength(2);
+    expect(collectionStats.find((stat) => stat.collection.name === 'Sample Group')?.postCount).toBe(1);
+    expect(collectionStats.find((stat) => stat.collection.name === 'Other Group')?.postCount).toBe(1);
   });
 
   it('filters paginated posts by group url', async () => {
@@ -293,11 +293,11 @@ describe('postRepository', () => {
     const sampleGroupPost = createSamplePost(1);
     const otherGroupPost = {
       ...createSamplePost(2),
-      group: {
+      collection: {
         name: 'Other Group',
         url: 'https://www.facebook.com/groups/other-group',
       },
-      postUrl: 'https://www.facebook.com/groups/other-group/permalink/2',
+      externalUrl: 'https://www.facebook.com/groups/other-group/permalink/2',
     };
 
     await upsertPosts([sampleGroupPost, otherGroupPost]);
@@ -309,7 +309,7 @@ describe('postRepository', () => {
     );
 
     expect(filteredPage.total).toBe(1);
-    expect(filteredPage.posts[0]?.group.url).toBe(
+    expect(filteredPage.posts[0]?.collection.url).toBe(
       'https://www.facebook.com/groups/sample-group',
     );
   });
@@ -321,18 +321,18 @@ describe('postRepository', () => {
       createSamplePost(1),
       {
         ...createSamplePost(2),
-        group: {
+        collection: {
           name: 'Other Group',
           url: 'https://www.facebook.com/groups/other-group',
         },
-        postUrl: 'https://www.facebook.com/groups/other-group/permalink/2',
+        externalUrl: 'https://www.facebook.com/groups/other-group/permalink/2',
       },
     ]);
 
-    await clearGroupPosts('https://www.facebook.com/groups/sample-group');
+    await clearCollectionPosts('https://www.facebook.com/groups/sample-group');
 
     expect(await countPosts()).toBe(1);
     const remainingPosts = await listAllPosts();
-    expect(remainingPosts[0]?.group.name).toBe('Other Group');
+    expect(remainingPosts[0]?.collection.name).toBe('Other Group');
   });
 });

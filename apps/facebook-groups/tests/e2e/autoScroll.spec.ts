@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
 import { parseBackgroundResponse } from '../../src/shared/messaging/protocol';
-import { sumGroupStats } from '../../src/shared/stats/groupStats';
+import { sumCollectionStats } from '../../src/shared/stats/collectionStats';
 import type { CaptureSession } from '../../src/shared/types';
 
 const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'growing-group-page.html');
-const groupUrl = 'https://www.facebook.com/groups/auto-group';
+const collectionUrl = 'https://www.facebook.com/groups/auto-group';
 const TOTAL_STORIES = 6;
 
 let context: BrowserContext;
@@ -32,7 +32,7 @@ test.beforeAll(async () => {
     });
   });
 
-  await facebookPage.goto(groupUrl, { waitUntil: 'domcontentloaded' });
+  await facebookPage.goto(collectionUrl, { waitUntil: 'domcontentloaded' });
 });
 
 test.afterAll(async () => {
@@ -133,7 +133,7 @@ test('scrolls the group by itself and stores every post exactly once', async () 
 
   // The first story lost its node and aged its timestamp mid-run, so its content
   // hash changed. It must still count as one post, not two.
-  expect(sumGroupStats(session.groupStats).postCount).toBe(TOTAL_STORIES);
+  expect(sumCollectionStats(session.collectionStats).postCount).toBe(TOTAL_STORIES);
   expect(session.status).toBe('capturing');
 
   await readSession({ type: 'STOP_CAPTURE' });

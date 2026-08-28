@@ -1,30 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import type { CapturedPost } from '../types';
 import {
-  buildGroupStats,
+  buildCollectionStats,
   buildPublicationWindow,
-  findGroupStats,
+  findCollectionStats,
   formatPublicationWindow,
-  groupPostsByGroupUrl,
-  sumGroupStats,
-} from './groupStats';
+  groupPostsByCollectionUrl,
+  sumCollectionStats,
+} from './collectionStats';
 
 function createSamplePost(
-  groupUrl: string,
-  groupName: string,
+  collectionUrl: string,
+  collectionName: string,
   overrides: Partial<CapturedPost> = {},
 ): CapturedPost {
   const capturedAt = overrides.capturedAt ?? '2026-08-19T12:00:00.000Z';
 
   return {
-    identityKey: `postId:${groupUrl}-${String(Math.random())}`,
-    identitySource: 'postId',
+    identityKey: `postId:${collectionUrl}-${String(Math.random())}`,
+    identitySource: 'externalId',
     fingerprint: null,
-    postId: '1',
-    postUrl: `${groupUrl}/posts/1/`,
-    group: {
-      name: groupName,
-      url: groupUrl,
+    externalId: '1',
+    externalUrl: `${collectionUrl}/posts/1/`,
+    collection: {
+      name: collectionName,
+      url: collectionUrl,
     },
     author: { kind: 'named', name: 'Jane Doe', profileUrl: null },
     text: 'Hello',
@@ -56,7 +56,7 @@ function createSamplePost(
   };
 }
 
-describe('groupStats', () => {
+describe('collectionStats', () => {
   it('groups posts by group url', () => {
     const posts = [
       createSamplePost('https://www.facebook.com/groups/a', 'Group A'),
@@ -64,7 +64,7 @@ describe('groupStats', () => {
       createSamplePost('https://www.facebook.com/groups/a', 'Group A'),
     ];
 
-    const groupedPosts = groupPostsByGroupUrl(posts);
+    const groupedPosts = groupPostsByCollectionUrl(posts);
 
     expect(groupedPosts.size).toBe(2);
     expect(groupedPosts.get('https://www.facebook.com/groups/a')).toHaveLength(2);
@@ -104,7 +104,7 @@ describe('groupStats', () => {
   });
 
   it('builds per-group stats with incomplete counts and sorting by last capture', () => {
-    const groupStats = buildGroupStats([
+    const collectionStats = buildCollectionStats([
       createSamplePost('https://www.facebook.com/groups/a', 'Group A', {
         capturedAt: '2026-08-19T10:00:00.000Z',
         warnings: ['TRUNCATED_TEXT'],
@@ -117,22 +117,22 @@ describe('groupStats', () => {
       }),
     ]);
 
-    expect(groupStats).toHaveLength(2);
-    expect(groupStats[0]?.group.name).toBe('Group B');
-    expect(groupStats[1]?.postCount).toBe(2);
-    expect(groupStats[1]?.incompletePostCount).toBe(1);
-    expect(groupStats[1]?.commentCount).toBe(2);
+    expect(collectionStats).toHaveLength(2);
+    expect(collectionStats[0]?.collection.name).toBe('Group B');
+    expect(collectionStats[1]?.postCount).toBe(2);
+    expect(collectionStats[1]?.incompletePostCount).toBe(1);
+    expect(collectionStats[1]?.commentCount).toBe(2);
   });
 
   it('sums totals across groups', () => {
-    const groupStats = buildGroupStats([
+    const collectionStats = buildCollectionStats([
       createSamplePost('https://www.facebook.com/groups/a', 'Group A', {
         warnings: ['TRUNCATED_TEXT'],
       }),
       createSamplePost('https://www.facebook.com/groups/b', 'Group B'),
     ]);
 
-    expect(sumGroupStats(groupStats)).toEqual({
+    expect(sumCollectionStats(collectionStats)).toEqual({
       postCount: 2,
       incompletePostCount: 1,
       commentCount: 2,
@@ -140,12 +140,12 @@ describe('groupStats', () => {
   });
 
   it('finds stats for a specific group url', () => {
-    const groupStats = buildGroupStats([
+    const collectionStats = buildCollectionStats([
       createSamplePost('https://www.facebook.com/groups/a', 'Group A'),
     ]);
 
-    expect(findGroupStats(groupStats, 'https://www.facebook.com/groups/a')?.postCount).toBe(1);
-    expect(findGroupStats(groupStats, 'https://www.facebook.com/groups/missing')).toBeNull();
+    expect(findCollectionStats(collectionStats, 'https://www.facebook.com/groups/a')?.postCount).toBe(1);
+    expect(findCollectionStats(collectionStats, 'https://www.facebook.com/groups/missing')).toBeNull();
   });
 
   it('formats publication windows for display', () => {

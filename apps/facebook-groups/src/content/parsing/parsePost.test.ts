@@ -29,7 +29,7 @@ describe('parsePost', () => {
     const postElement = loadFixture('text-post-with-comment.html');
     const parsed = parsePost(postElement, group);
 
-    expect(parsed.postId).toBe('1234567890');
+    expect(parsed.externalId).toBe('1234567890');
     expect(parsed.text).toContain('sample post');
     expect(parsed.comments).toHaveLength(1);
     expect(parsed.reactionCount).toBe(12);
@@ -69,8 +69,8 @@ describe('parsePost', () => {
     const postElement = loadFixture('comet-post.html');
     const parsed = parsePost(postElement, group);
 
-    expect(parsed.postId).toBe('1855528195424558');
-    expect(parsed.postUrl).toBe(
+    expect(parsed.externalId).toBe('1855528195424558');
+    expect(parsed.externalUrl).toBe(
       'https://www.facebook.com/groups/sample-group/posts/1855528195424558/',
     );
     expect(parsed.author).toEqual({
@@ -135,8 +135,8 @@ describe('parsePost', () => {
     const postElement = loadFixture('abbr-date-post.html');
     const parsed = parsePost(postElement, group);
 
-    expect(parsed.postId).toBe('9001');
-    expect(parsed.postUrl).toBe(
+    expect(parsed.externalId).toBe('9001');
+    expect(parsed.externalUrl).toBe(
       'https://www.facebook.com/groups/sample-group/posts/9001/',
     );
   });
@@ -145,8 +145,8 @@ describe('parsePost', () => {
     const postElement = loadFixture('photo-link-post.html');
     const parsed = parsePost(postElement, group);
 
-    expect(parsed.postId).toBe('9004');
-    expect(parsed.postUrl).toBe(
+    expect(parsed.externalId).toBe('9004');
+    expect(parsed.externalUrl).toBe(
       'https://www.facebook.com/groups/sample-group/posts/9004/',
     );
   });

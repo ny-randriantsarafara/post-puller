@@ -1,7 +1,7 @@
 import {
-  clearGroupPosts,
+  clearCollectionPosts,
   clearPosts,
-  listGroupStats,
+  listCollectionStats,
   listIdentityKeys,
   upsertPosts,
 } from '../shared/storage/postRepository';
@@ -37,18 +37,18 @@ async function ensureIdentityKeysLoaded(): Promise<void> {
 }
 
 async function refreshSessionCounts(session: CaptureSession): Promise<CaptureSession> {
-  const groupStats = await listGroupStats();
+  const collectionStats = await listCollectionStats();
 
   return {
     ...session,
-    groupStats,
+    collectionStats,
   };
 }
 
 type PageInfo = {
-  isGroupPage: boolean;
-  groupName: string | null;
-  groupUrl: string | null;
+  isTargetPage: boolean;
+  collectionName: string | null;
+  collectionUrl: string | null;
 };
 
 function readContentScriptFiles(): string[] {
@@ -110,9 +110,9 @@ function toPageInfo(response: ContentResponse): Result<PageInfo, string> {
   }
 
   return ok({
-    isGroupPage: response.isGroupPage,
-    groupName: response.groupName,
-    groupUrl: response.groupUrl,
+    isTargetPage: response.isTargetPage,
+    collectionName: response.collectionName,
+    collectionUrl: response.collectionUrl,
   });
 }
 
@@ -155,7 +155,7 @@ async function handleStartCapture(
     };
   }
 
-  if (!pageInfo.value.isGroupPage || pageInfo.value.groupUrl === null) {
+  if (!pageInfo.value.isTargetPage || pageInfo.value.collectionUrl === null) {
     return {
       type: 'ERROR',
       message: 'Open a Facebook group page before starting capture.',
@@ -169,8 +169,8 @@ async function handleStartCapture(
     mode,
     options,
     tabId,
-    groupUrl: pageInfo.value.groupUrl,
-    groupName: pageInfo.value.groupName,
+    collectionUrl: pageInfo.value.collectionUrl,
+    collectionName: pageInfo.value.collectionName,
     startedAt,
     stoppedAt: null,
     interruptedAt: null,
@@ -303,8 +303,8 @@ async function handleClearData(): Promise<BackgroundResponse> {
   };
 }
 
-async function handleClearGroupData(groupUrl: string): Promise<BackgroundResponse> {
-  await clearGroupPosts(groupUrl);
+async function handleClearGroupData(collectionUrl: string): Promise<BackgroundResponse> {
+  await clearCollectionPosts(collectionUrl);
   await ensureIdentityKeysLoaded();
   identityKeys = new Set(await listIdentityKeys());
   identityKeysLoaded = true;
@@ -345,8 +345,8 @@ export async function handleBackgroundMessage(
       return handleStopCapture();
     case 'CLEAR_DATA':
       return handleClearData();
-    case 'CLEAR_GROUP_DATA':
-      return handleClearGroupData(parsedRequest.groupUrl);
+    case 'CLEAR_COLLECTION_DATA':
+      return handleClearGroupData(parsedRequest.collectionUrl);
     case 'POSTS_CAPTURED': {
       const senderTabId = sender.tab?.id ?? -1;
       return handlePostsCaptured(senderTabId, parsedRequest.tabId, parsedRequest.posts);

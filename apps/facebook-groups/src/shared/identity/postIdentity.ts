@@ -1,19 +1,29 @@
 import { createContentHash } from '@extractor/capture-core/identity';
+import {
+  buildIdentityKey,
+  isStrongerIdentitySource,
+  type IdentityKeyPrefixes,
+  type IdentitySource,
+} from '@extractor/capture-core/domain';
 import { createPostFingerprint } from './postFingerprint';
 import { extractPostIdFromElement, extractPostIdFromUrl, normalizePostUrl } from './postUrl';
-import type { CapturedPost, IdentitySource, ParsedPostDraft } from '../types';
+import type { CapturedPost, ParsedPostDraft } from '../types';
 
-const IDENTITY_STRENGTH: Record<IdentitySource, number> = {
-  contentHash: 0,
-  postUrl: 1,
-  postId: 2,
+// These are the prefixes of primary keys already written to IndexedDB, so they
+// stay on the old field names. Deriving them from externalId/externalUrl would
+// make every re-seen post miss its record and, whenever the fingerprint is
+// null, insert a duplicate rather than fail.
+export const POST_IDENTITY_KEY_PREFIXES: IdentityKeyPrefixes = {
+  externalId: 'postId',
+  externalUrl: 'postUrl',
+  contentHash: 'contentHash',
 };
 
 export type PostIdentity = {
   identityKey: string;
   identitySource: IdentitySource;
-  postId: string | null;
-  postUrl: string | null;
+  externalId: string | null;
+  externalUrl: string | null;
 };
 
 export function resolveAuthorLabel(author: ParsedPostDraft['author']): string {
@@ -32,27 +42,31 @@ export async function resolvePostIdentity(
   draft: ParsedPostDraft,
   postElement: Element | null,
 ): Promise<PostIdentity> {
-  const normalizedUrl = normalizePostUrl(draft.postUrl);
+  const normalizedUrl = normalizePostUrl(draft.externalUrl);
   const postIdFromUrl = extractPostIdFromUrl(normalizedUrl);
   const postIdFromElement =
     postElement === null ? null : extractPostIdFromElement(postElement);
-  const postId = postIdFromElement ?? postIdFromUrl ?? draft.postId;
+  const postId = postIdFromElement ?? postIdFromUrl ?? draft.externalId;
 
   if (postId !== null) {
     return {
-      identityKey: `postId:${postId}`,
-      identitySource: 'postId',
-      postId,
-      postUrl: normalizedUrl,
+      identityKey: buildIdentityKey(POST_IDENTITY_KEY_PREFIXES, 'externalId', postId),
+      identitySource: 'externalId',
+      externalId: postId,
+      externalUrl: normalizedUrl,
     };
   }
 
   if (normalizedUrl !== null) {
     return {
-      identityKey: `postUrl:${normalizedUrl}`,
-      identitySource: 'postUrl',
-      postId: null,
-      postUrl: normalizedUrl,
+      identityKey: buildIdentityKey(
+        POST_IDENTITY_KEY_PREFIXES,
+        'externalUrl',
+        normalizedUrl,
+      ),
+      identitySource: 'externalUrl',
+      externalId: null,
+      externalUrl: normalizedUrl,
     };
   }
 
@@ -63,10 +77,14 @@ export async function resolvePostIdentity(
   });
 
   return {
-    identityKey: `contentHash:${contentHash}`,
+    identityKey: buildIdentityKey(
+      POST_IDENTITY_KEY_PREFIXES,
+      'contentHash',
+      contentHash,
+    ),
     identitySource: 'contentHash',
-    postId: null,
-    postUrl: null,
+    externalId: null,
+    externalUrl: null,
   };
 }
 
@@ -94,9 +112,9 @@ export function isStrongerIdentity(
   existingPost: CapturedPost,
   incomingPost: CapturedPost,
 ): boolean {
-  return (
-    IDENTITY_STRENGTH[incomingPost.identitySource] >
-    IDENTITY_STRENGTH[existingPost.identitySource]
+  return isStrongerIdentitySource(
+    existingPost.identitySource,
+    incomingPost.identitySource,
   );
 }
 
@@ -108,17 +126,17 @@ export function contradictsStoredIdentity(
   incomingPost: CapturedPost,
 ): boolean {
   if (
-    existingPost.postId !== null &&
-    incomingPost.postId !== null &&
-    existingPost.postId !== incomingPost.postId
+    existingPost.externalId !== null &&
+    incomingPost.externalId !== null &&
+    existingPost.externalId !== incomingPost.externalId
   ) {
     return true;
   }
 
   return (
-    existingPost.postUrl !== null &&
-    incomingPost.postUrl !== null &&
-    existingPost.postUrl !== incomingPost.postUrl
+    existingPost.externalUrl !== null &&
+    incomingPost.externalUrl !== null &&
+    existingPost.externalUrl !== incomingPost.externalUrl
   );
 }
 

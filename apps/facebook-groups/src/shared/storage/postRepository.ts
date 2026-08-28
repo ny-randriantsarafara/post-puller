@@ -1,4 +1,5 @@
-import type { CapturedPost, IdentitySource } from '../types';
+import type { IdentitySource } from '@extractor/capture-core/domain';
+import type { CapturedPost } from '../types';
 import { capturedPostSchema } from '../messaging/protocol';
 import { isBetterCapturedPost, mergeComments } from '../captureQuality';
 import {
@@ -6,10 +7,13 @@ import {
   isIdentifiableCapturedPost,
   isStrongerIdentity,
 } from '../identity/postIdentity';
-import { buildGroupStats, type GroupCaptureStats } from '../stats/groupStats';
+import { buildCollectionStats, type CollectionCaptureStats } from '../stats/collectionStats';
 
 const DATABASE_NAME = 'facebookGroupCapture';
-const DATABASE_VERSION = 2;
+// Bumped for the rename to generic item fields. There is no upgrade work to do:
+// stored records are migrated as they are read, and identityKey, the primary
+// key, deliberately did not change.
+const DATABASE_VERSION = 3;
 const STORE_NAME = 'capturedPosts';
 const FINGERPRINT_INDEX = 'by_fingerprint';
 
@@ -261,29 +265,29 @@ export async function listAllPosts(): Promise<CapturedPost[]> {
   return parseStoredPosts(values);
 }
 
-export async function listGroupStats(): Promise<GroupCaptureStats[]> {
+export async function listCollectionStats(): Promise<CollectionCaptureStats[]> {
   const posts = await listAllPosts();
-  return buildGroupStats(posts);
+  return buildCollectionStats(posts);
 }
 
 function filterPostsByGroup(
   posts: CapturedPost[],
-  groupUrl: string | null,
+  collectionUrl: string | null,
 ): CapturedPost[] {
-  if (groupUrl === null) {
+  if (collectionUrl === null) {
     return posts;
   }
 
-  return posts.filter((post) => post.group.url === groupUrl);
+  return posts.filter((post) => post.collection.url === collectionUrl);
 }
 
 export async function listPostsPage(
   offset: number,
   limit: number,
-  groupUrl: string | null = null,
+  collectionUrl: string | null = null,
 ): Promise<PostPage> {
   const allPosts = await listAllPosts();
-  const filteredPosts = filterPostsByGroup(allPosts, groupUrl);
+  const filteredPosts = filterPostsByGroup(allPosts, collectionUrl);
   const sortedPosts = [...filteredPosts].sort((left, right) =>
     right.capturedAt.localeCompare(left.capturedAt),
   );
@@ -303,10 +307,10 @@ export async function clearPosts(): Promise<void> {
   });
 }
 
-export async function clearGroupPosts(groupUrl: string): Promise<void> {
+export async function clearCollectionPosts(collectionUrl: string): Promise<void> {
   const posts = await listAllPosts();
   const identityKeys = posts
-    .filter((post) => post.group.url === groupUrl)
+    .filter((post) => post.collection.url === collectionUrl)
     .map((post) => post.identityKey);
 
   if (identityKeys.length === 0) {

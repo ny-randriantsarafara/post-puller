@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { downloadGroupExports } from '../shared/export/exportEnvelope';
-import { listGroupStats, listPostsPage } from '../shared/storage/postRepository';
+import { downloadCollectionExports } from '../shared/export/exportEnvelope';
+import { listCollectionStats, listPostsPage } from '../shared/storage/postRepository';
 import {
   formatPublicationWindow,
-  type GroupCaptureStats,
-} from '../shared/stats/groupStats';
+  type CollectionCaptureStats,
+} from '../shared/stats/collectionStats';
 import type { CapturedPost, ReactionBreakdown } from '../shared/types';
 import { REACTION_TYPES, sumReactionBreakdown } from '../shared/types';
 
@@ -31,7 +31,7 @@ function formatPublicationDate(post: CapturedPost): string {
   return post.displayedDate ?? 'Unknown date';
 }
 
-function formatGroupLabel(group: GroupCaptureStats['group']): string {
+function formatCollectionLabel(group: CollectionCaptureStats['collection']): string {
   if (group.name !== null && group.name.trim().length > 0) {
     return group.name;
   }
@@ -78,7 +78,7 @@ function formatEngagementSummary(post: CapturedPost): string {
 
 export function PreviewPage() {
   const [posts, setPosts] = useState<CapturedPost[]>([]);
-  const [groupStats, setGroupStats] = useState<GroupCaptureStats[]>([]);
+  const [collectionStats, setGroupStats] = useState<CollectionCaptureStats[]>([]);
   const [selectedGroupUrl, setSelectedGroupUrl] = useState<string>(ALL_GROUPS);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -86,16 +86,16 @@ export function PreviewPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadGroupStats = useCallback(async () => {
-    const stats = await listGroupStats();
+    const stats = await listCollectionStats();
     setGroupStats(stats);
   }, []);
 
-  const loadPage = useCallback(async (pageOffset: number, groupUrl: string | null) => {
+  const loadPage = useCallback(async (pageOffset: number, collectionUrl: string | null) => {
     setIsLoading(true);
     setErrorMessage(null);
 
     try {
-      const page = await listPostsPage(pageOffset, PAGE_SIZE, groupUrl);
+      const page = await listPostsPage(pageOffset, PAGE_SIZE, collectionUrl);
       setPosts(page.posts);
       setTotal(page.total);
       setOffset(page.offset);
@@ -112,8 +112,8 @@ export function PreviewPage() {
   }, [loadGroupStats]);
 
   useEffect(() => {
-    const groupUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
-    void loadPage(0, groupUrl);
+    const collectionUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
+    void loadPage(0, collectionUrl);
   }, [loadPage, selectedGroupUrl]);
 
   const handleExport = async () => {
@@ -121,9 +121,9 @@ export function PreviewPage() {
     const postsToExport =
       selectedGroupUrl === ALL_GROUPS
         ? allPostsPage.posts
-        : allPostsPage.posts.filter((post) => post.group.url === selectedGroupUrl);
+        : allPostsPage.posts.filter((post) => post.collection.url === selectedGroupUrl);
 
-    downloadGroupExports(
+    downloadCollectionExports(
       postsToExport,
       chrome.runtime.getManifest().version,
       new Date().toISOString(),
@@ -142,7 +142,7 @@ export function PreviewPage() {
           <button
             type="button"
             className="button button--secondary"
-            disabled={total === 0 && groupStats.length === 0}
+            disabled={total === 0 && collectionStats.length === 0}
             onClick={() => {
               void handleExport();
             }}
@@ -152,16 +152,16 @@ export function PreviewPage() {
         </div>
       </header>
 
-      {groupStats.length > 0 && (
+      {collectionStats.length > 0 && (
         <section className="preview__summary">
           <h2 className="preview__summary-title">Captured by group</h2>
           <div className="preview__summary-grid">
-            {groupStats.map((groupStat) => (
-              <article className="preview__summary-card" key={groupStat.group.url}>
-                <h3 className="preview__summary-name">{formatGroupLabel(groupStat.group)}</h3>
+            {collectionStats.map((collectionStat) => (
+              <article className="preview__summary-card" key={collectionStat.collection.url}>
+                <h3 className="preview__summary-name">{formatCollectionLabel(collectionStat.collection)}</h3>
                 <p className="preview__summary-meta">
-                  {groupStat.postCount} posts · {groupStat.incompletePostCount} incomplete ·{' '}
-                  {formatPublicationWindow(groupStat.publicationWindow)}
+                  {collectionStat.postCount} posts · {collectionStat.incompletePostCount} incomplete ·{' '}
+                  {formatPublicationWindow(collectionStat.publicationWindow)}
                 </p>
               </article>
             ))}
@@ -169,7 +169,7 @@ export function PreviewPage() {
         </section>
       )}
 
-      {groupStats.length > 0 && (
+      {collectionStats.length > 0 && (
         <label className="preview__filter">
           <span className="preview__filter-label">Show posts from</span>
           <select
@@ -180,9 +180,9 @@ export function PreviewPage() {
             }}
           >
             <option value={ALL_GROUPS}>All groups</option>
-            {groupStats.map((groupStat) => (
-              <option key={groupStat.group.url} value={groupStat.group.url}>
-                {formatGroupLabel(groupStat.group)}
+            {collectionStats.map((collectionStat) => (
+              <option key={collectionStat.collection.url} value={collectionStat.collection.url}>
+                {formatCollectionLabel(collectionStat.collection)}
               </option>
             ))}
           </select>
@@ -202,7 +202,7 @@ export function PreviewPage() {
           <article key={post.identityKey} className="post-card">
             <div className="post-card__meta">
               {showGroupName && (
-                <span className="post-card__group">{formatGroupLabel(post.group)} · </span>
+                <span className="post-card__group">{formatCollectionLabel(post.collection)} · </span>
               )}
               {formatAuthor(post)} · {formatPublicationDate(post)}
               {post.displayedDate !== null && post.publishedAt !== null && (
@@ -215,10 +215,10 @@ export function PreviewPage() {
                 {formatReactionBreakdown(post.reactionBreakdown)}
               </p>
             )}
-            {post.postUrl !== null && (
+            {post.externalUrl !== null && (
               <a
                 className="post-card__link"
-                href={post.postUrl}
+                href={post.externalUrl}
                 target="_blank"
                 rel="noreferrer"
               >
@@ -259,8 +259,8 @@ export function PreviewPage() {
             className="button button--secondary"
             disabled={!canGoPrevious}
             onClick={() => {
-              const groupUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
-              void loadPage(Math.max(offset - PAGE_SIZE, 0), groupUrl);
+              const collectionUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
+              void loadPage(Math.max(offset - PAGE_SIZE, 0), collectionUrl);
             }}
           >
             Previous
@@ -273,8 +273,8 @@ export function PreviewPage() {
             className="button button--secondary"
             disabled={!canGoNext}
             onClick={() => {
-              const groupUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
-              void loadPage(offset + PAGE_SIZE, groupUrl);
+              const collectionUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
+              void loadPage(offset + PAGE_SIZE, collectionUrl);
             }}
           >
             Next

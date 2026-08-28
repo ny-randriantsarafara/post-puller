@@ -8,7 +8,7 @@ import {
 import { trySendBackgroundRequest } from '../shared/messaging/client';
 import { AutoScroller } from './autoScroll';
 import { FeedObserver } from './feedObserver';
-import { getGroupPageInfo } from './groupPage';
+import { resolvePageTarget } from './groupPage';
 
 let isCapturing = false;
 let feedObserver: FeedObserver | null = null;
@@ -68,8 +68,8 @@ function ensureAutoScroller(): AutoScroller {
 }
 
 function beginCapture(mode: CaptureMode, options: CaptureOptions): void {
-  const pageInfo = getGroupPageInfo();
-  if (!pageInfo.isGroupPage) {
+  const pageInfo = resolvePageTarget();
+  if (!pageInfo.isTargetPage) {
     return;
   }
 
@@ -92,8 +92,8 @@ function handleNavigationChange(): void {
     return;
   }
 
-  const pageInfo = getGroupPageInfo();
-  if (!pageInfo.isGroupPage) {
+  const pageInfo = resolvePageTarget();
+  if (!pageInfo.isTargetPage) {
     isCapturing = false;
     ensureFeedObserver().interrupt();
 
@@ -142,12 +142,12 @@ export function handleContentMessage(
 
   switch (parsedRequest.type) {
     case 'GET_PAGE_INFO': {
-      const pageInfo = getGroupPageInfo();
+      const pageInfo = resolvePageTarget();
       return Promise.resolve({
         type: 'PAGE_INFO',
-        isGroupPage: pageInfo.isGroupPage,
-        groupName: pageInfo.groupName,
-        groupUrl: pageInfo.groupUrl,
+        isTargetPage: pageInfo.isTargetPage,
+        collectionName: pageInfo.collectionName,
+        collectionUrl: pageInfo.collectionUrl,
       });
     }
     case 'BEGIN_CAPTURE':

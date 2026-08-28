@@ -1,4 +1,5 @@
-import type { CapturedPost, GroupInfo } from '../shared/types';
+import type { CollectionInfo } from '@extractor/capture-core/domain';
+import type { CapturedPost } from '../shared/types';
 import {
   DEFAULT_CAPTURE_OPTIONS,
   type CaptureOptions,
@@ -11,7 +12,7 @@ import {
 import { isBetterCapturedPost } from '../shared/captureQuality';
 import { clickPostTextExpansionControls } from './expandPostText';
 import { clickCommentExpansionControls } from './expandComments';
-import { getGroupPageInfo } from './groupPage';
+import { resolvePageTarget } from './groupPage';
 import { parsePost } from './parsing/parsePost';
 import { SELECTORS } from './parsing/selectors';
 import {
@@ -71,8 +72,8 @@ export class FeedObserver {
 
     this.captureOptions = options.options ?? DEFAULT_CAPTURE_OPTIONS;
 
-    const pageInfo = getGroupPageInfo();
-    if (!pageInfo.isGroupPage || pageInfo.groupUrl === null) {
+    const pageInfo = resolvePageTarget();
+    if (!pageInfo.isTargetPage || pageInfo.collectionUrl === null) {
       return;
     }
 
@@ -234,15 +235,15 @@ export class FeedObserver {
       return;
     }
 
-    const pageInfo = getGroupPageInfo();
-    if (!pageInfo.isGroupPage || pageInfo.groupUrl === null) {
+    const pageInfo = resolvePageTarget();
+    if (!pageInfo.isTargetPage || pageInfo.collectionUrl === null) {
       this.interrupt();
       return;
     }
 
     const group = {
-      name: pageInfo.groupName,
-      url: pageInfo.groupUrl,
+      name: pageInfo.collectionName,
+      url: pageInfo.collectionUrl,
     };
 
     const capturedPosts: CapturedPost[] = [];
@@ -307,7 +308,7 @@ export class FeedObserver {
   // is already cleared by the time posts are parsed.
   private async capturePost(
     element: Element,
-    group: GroupInfo,
+    group: CollectionInfo,
   ): Promise<CapturedPost | null> {
     try {
       const draft = parsePost(element, group, this.captureOptions);

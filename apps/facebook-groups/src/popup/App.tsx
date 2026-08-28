@@ -1,30 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  downloadGroupExports,
+  downloadCollectionExports,
 } from '../shared/export/exportEnvelope';
 import { listPostsPage } from '../shared/storage/postRepository';
 import { trySendBackgroundRequest } from '../shared/messaging/client';
 import type { BackgroundRequest } from '../shared/messaging/protocol';
 import {
-  findGroupStats,
-  sumGroupStats,
-} from '../shared/stats/groupStats';
+  findCollectionStats,
+  sumCollectionStats,
+} from '../shared/stats/collectionStats';
 import type { CaptureMode, CaptureSession } from '../shared/types';
 import { DEFAULT_CAPTURE_OPTIONS, type CaptureOptions } from '../shared/types';
 import { EMPTY_CAPTURE_SESSION } from '../shared/types';
 import { CaptureOptionsPanel } from './components/CaptureOptionsPanel';
-import { GroupStatsList } from './components/GroupStatsList';
+import { CollectionStatsList } from './components/CollectionStatsList';
 import { MetricCard } from './components/MetricCard';
 import { ScanModeSelector } from './components/ScanModeSelector';
 import { StatusBadge } from './components/StatusBadge';
 
 function getActiveGroupLabel(session: CaptureSession): string {
-  if (session.groupName !== null && session.groupName.trim().length > 0) {
-    return session.groupName;
+  if (session.collectionName !== null && session.collectionName.trim().length > 0) {
+    return session.collectionName;
   }
 
-  if (session.groupUrl !== null) {
-    const slug = session.groupUrl.split('/').filter(Boolean).pop();
+  if (session.collectionUrl !== null) {
+    const slug = session.collectionUrl.split('/').filter(Boolean).pop();
     if (slug !== undefined) {
       return slug;
     }
@@ -38,9 +38,9 @@ function getStatusMessage(session: CaptureSession): string | null {
     return 'Capture was interrupted by navigation or refresh. Start again on the group page.';
   }
 
-  const activeGroupStats = findGroupStats(session.groupStats, session.groupUrl);
+  const activeGroupStats = findCollectionStats(session.collectionStats, session.collectionUrl);
   const incompletePostCount =
-    activeGroupStats?.incompletePostCount ?? sumGroupStats(session.groupStats).incompletePostCount;
+    activeGroupStats?.incompletePostCount ?? sumCollectionStats(session.collectionStats).incompletePostCount;
 
   if (incompletePostCount > 0) {
     return `${String(incompletePostCount)} captured posts may contain incomplete data.`;
@@ -180,15 +180,15 @@ export function App() {
     await runSessionCommand({ type: 'CLEAR_DATA' });
   };
 
-  const handleClearGroup = async (groupUrl: string, groupName: string | null) => {
+  const handleClearGroup = async (collectionUrl: string, collectionName: string | null) => {
     const label =
-      groupName !== null && groupName.trim().length > 0 ? groupName : 'this group';
+      collectionName !== null && collectionName.trim().length > 0 ? collectionName : 'this group';
     const confirmed = window.confirm(`Clear captured posts for ${label}?`);
     if (!confirmed) {
       return;
     }
 
-    await runSessionCommand({ type: 'CLEAR_GROUP_DATA', groupUrl });
+    await runSessionCommand({ type: 'CLEAR_COLLECTION_DATA', collectionUrl });
   };
 
   const handleOpenPreview = () => {
@@ -198,7 +198,7 @@ export function App() {
 
   const handleExportJson = async () => {
     const allPostsPage = await listPostsPage(0, Number.MAX_SAFE_INTEGER);
-    downloadGroupExports(
+    downloadCollectionExports(
       allPostsPage.posts,
       chrome.runtime.getManifest().version,
       new Date().toISOString(),
@@ -210,8 +210,8 @@ export function App() {
   const isCapturing = session.status === 'capturing';
   const selectedMode = resolveSelectedMode(session, requestedMode);
   const selectedOptions = resolveSelectedOptions(session, requestedOptions);
-  const totals = sumGroupStats(session.groupStats);
-  const activeGroupStats = findGroupStats(session.groupStats, session.groupUrl);
+  const totals = sumCollectionStats(session.collectionStats);
+  const activeGroupStats = findCollectionStats(session.collectionStats, session.collectionUrl);
   const activeGroupLabel = getActiveGroupLabel(session);
   const activePostCount = activeGroupStats?.postCount ?? 0;
   const activeIncompleteCount = activeGroupStats?.incompletePostCount ?? 0;
@@ -232,11 +232,11 @@ export function App() {
         />
       </div>
 
-      <GroupStatsList
-        groupStats={session.groupStats}
+      <CollectionStatsList
+        collectionStats={session.collectionStats}
         isBusy={isBusy}
-        onClearGroup={(groupUrl, groupName) => {
-          void handleClearGroup(groupUrl, groupName);
+        onClearCollection={(collectionUrl, collectionName) => {
+          void handleClearGroup(collectionUrl, collectionName);
         }}
       />
 

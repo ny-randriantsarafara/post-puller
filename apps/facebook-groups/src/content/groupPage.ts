@@ -2,42 +2,44 @@ import { readTrimmedText } from './parsing/domText';
 
 const EXCLUDED_GROUP_PATHS = ['/groups/feed', '/groups/discover', '/groups/create'];
 
-export type GroupPageInfo = {
-  isGroupPage: boolean;
-  groupName: string | null;
-  groupUrl: string | null;
+// What the generic capture layer needs to know about the current page: whether
+// it can capture here, and what collection anything captured belongs to.
+export type PageTarget = {
+  isTargetPage: boolean;
+  collectionName: string | null;
+  collectionUrl: string | null;
 };
 
 function isExcludedGroupPath(pathname: string): boolean {
   return EXCLUDED_GROUP_PATHS.some((path) => pathname.startsWith(path));
 }
 
-export function getGroupPageInfo(locationLike: Location = window.location): GroupPageInfo {
+export function resolvePageTarget(locationLike: Location = window.location): PageTarget {
   const pathname = locationLike.pathname;
   const groupMatch = /^\/groups\/([^/?#]+)/.exec(pathname);
 
   if (groupMatch?.[1] === undefined || isExcludedGroupPath(pathname)) {
     return {
-      isGroupPage: false,
-      groupName: null,
-      groupUrl: null,
+      isTargetPage: false,
+      collectionName: null,
+      collectionUrl: null,
     };
   }
 
   const groupSlug = groupMatch[1];
-  const groupUrl = `${locationLike.origin}/groups/${groupSlug}`;
+  const collectionUrl = `${locationLike.origin}/groups/${groupSlug}`;
 
   const heading = document.querySelector('[role="heading"]');
   const trimmedGroupName = readTrimmedText(heading);
-  const groupName = trimmedGroupName.length === 0 ? null : trimmedGroupName;
+  const collectionName = trimmedGroupName.length === 0 ? null : trimmedGroupName;
 
   return {
-    isGroupPage: true,
-    groupName,
-    groupUrl,
+    isTargetPage: true,
+    collectionName,
+    collectionUrl,
   };
 }
 
 export function isGroupPage(locationLike: Location = window.location): boolean {
-  return getGroupPageInfo(locationLike).isGroupPage;
+  return resolvePageTarget(locationLike).isTargetPage;
 }

@@ -8,9 +8,9 @@ import { normalizePostUrl } from './postUrl';
 import type { ParsedPostDraft } from '../types';
 
 const baseDraft: ParsedPostDraft = {
-  postId: null,
-  postUrl: null,
-  group: { name: 'Sample Group', url: 'https://www.facebook.com/groups/sample-group' },
+  externalId: null,
+  externalUrl: null,
+  collection: { name: 'Sample Group', url: 'https://www.facebook.com/groups/sample-group' },
   author: { kind: 'named', name: 'Jane Doe', profileUrl: null },
   text: 'Sample text',
   displayedDate: '2 hours ago',
@@ -29,15 +29,15 @@ describe('post identity resolution', () => {
     const identity = await resolvePostIdentity(
       {
         ...baseDraft,
-        postId: '123',
-        postUrl: 'https://www.facebook.com/groups/sample-group/permalink/123/?ref=feed',
+        externalId: '123',
+        externalUrl: 'https://www.facebook.com/groups/sample-group/permalink/123/?ref=feed',
       },
       null,
     );
 
-    expect(identity.identitySource).toBe('postId');
+    expect(identity.identitySource).toBe('externalId');
     expect(identity.identityKey).toBe('postId:123');
-    expect(normalizePostUrl(identity.postUrl)).toBe(
+    expect(normalizePostUrl(identity.externalUrl)).toBe(
       'https://www.facebook.com/groups/sample-group/permalink/123',
     );
   });
@@ -46,12 +46,12 @@ describe('post identity resolution', () => {
     const identity = await resolvePostIdentity(
       {
         ...baseDraft,
-        postUrl: 'https://www.facebook.com/groups/sample-group?post_id=456',
+        externalUrl: 'https://www.facebook.com/groups/sample-group?post_id=456',
       },
       null,
     );
 
-    expect(identity.identitySource).toBe('postUrl');
+    expect(identity.identitySource).toBe('externalUrl');
     expect(identity.identityKey).toBe(
       'postUrl:https://www.facebook.com/groups/sample-group',
     );
@@ -73,8 +73,8 @@ describe('post identity resolution', () => {
     const hydratedPost = await finalizeCapturedPost(
       {
         ...baseDraft,
-        postId: '123',
-        postUrl: 'https://www.facebook.com/groups/sample-group/posts/123/',
+        externalId: '123',
+        externalUrl: 'https://www.facebook.com/groups/sample-group/posts/123/',
       },
       null,
       '2026-08-19T10:00:01.000Z',
@@ -84,6 +84,6 @@ describe('post identity resolution', () => {
 
     expect(retainedPost.identityKey).toBe(previousPost.identityKey);
     expect(retainedPost.identitySource).toBe('contentHash');
-    expect(retainedPost.postId).toBe('123');
+    expect(retainedPost.externalId).toBe('123');
   });
 });

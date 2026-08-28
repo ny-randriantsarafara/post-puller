@@ -9,7 +9,7 @@ import { DEFAULT_CAPTURE_OPTIONS } from '../../src/shared/types';
 
 const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'comment-expansion-page.html');
-const groupUrl = 'https://www.facebook.com/groups/comment-expansion';
+const collectionUrl = 'https://www.facebook.com/groups/comment-expansion';
 
 let context: BrowserContext;
 let facebookPage: Page;
@@ -33,7 +33,7 @@ test.beforeAll(async () => {
     });
   });
 
-  await facebookPage.goto(groupUrl, { waitUntil: 'domcontentloaded' });
+  await facebookPage.goto(collectionUrl, { waitUntil: 'domcontentloaded' });
 });
 
 test.afterAll(async () => {

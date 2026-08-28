@@ -5,7 +5,7 @@ import {
   type ContentResponse,
 } from '../shared/messaging/protocol';
 import { clearPosts, upsertPosts } from '../shared/storage/postRepository';
-import { sumGroupStats } from '../shared/stats/groupStats';
+import { sumCollectionStats } from '../shared/stats/collectionStats';
 import type { CapturedPost } from '../shared/types';
 import { DEFAULT_CAPTURE_OPTIONS, type CaptureOptions } from '../shared/types';
 import { handleBackgroundMessage } from './captureCoordinator';
@@ -23,9 +23,9 @@ function respondAsContentScript(
   if (parsedRequest.type === 'GET_PAGE_INFO') {
     return Promise.resolve({
       type: 'PAGE_INFO',
-      isGroupPage: true,
-      groupName: 'Sample Group',
-      groupUrl: 'https://www.facebook.com/groups/sample-group',
+      isTargetPage: true,
+      collectionName: 'Sample Group',
+      collectionUrl: 'https://www.facebook.com/groups/sample-group',
     });
   }
 
@@ -83,18 +83,18 @@ function startCapture(
   );
 }
 
-function createStoredPost(postId: string, groupUrl: string, groupName: string): CapturedPost {
+function createStoredPost(postId: string, collectionUrl: string, collectionName: string): CapturedPost {
   const capturedAt = new Date().toISOString();
 
   return {
     identityKey: `postId:${postId}`,
-    identitySource: 'postId',
+    identitySource: 'externalId',
     fingerprint: null,
-    postId,
-    postUrl: `${groupUrl}/posts/${postId}/`,
-    group: {
-      name: groupName,
-      url: groupUrl,
+    externalId: postId,
+    externalUrl: `${collectionUrl}/posts/${postId}/`,
+    collection: {
+      name: collectionName,
+      url: collectionUrl,
     },
     author: { kind: 'named', name: 'Jane Doe', profileUrl: null },
     text: `Post ${postId}`,
@@ -237,8 +237,8 @@ describe('handleBackgroundMessage', () => {
       throw new Error(response.message);
     }
 
-    expect(response.session.groupStats).toHaveLength(2);
-    expect(sumGroupStats(response.session.groupStats).postCount).toBe(2);
+    expect(response.session.collectionStats).toHaveLength(2);
+    expect(sumCollectionStats(response.session.collectionStats).postCount).toBe(2);
   });
 
   it('clears one group without removing the others', async () => {
@@ -251,8 +251,8 @@ describe('handleBackgroundMessage', () => {
 
     const response = await handleBackgroundMessage(
       {
-        type: 'CLEAR_GROUP_DATA',
-        groupUrl: 'https://www.facebook.com/groups/sample-group',
+        type: 'CLEAR_COLLECTION_DATA',
+        collectionUrl: 'https://www.facebook.com/groups/sample-group',
       },
       {},
     );
@@ -261,7 +261,7 @@ describe('handleBackgroundMessage', () => {
       throw new Error(response.message);
     }
 
-    expect(response.session.groupStats).toHaveLength(1);
-    expect(response.session.groupStats[0]?.group.name).toBe('Other Group');
+    expect(response.session.collectionStats).toHaveLength(1);
+    expect(response.session.collectionStats[0]?.collection.name).toBe('Other Group');
   });
 });

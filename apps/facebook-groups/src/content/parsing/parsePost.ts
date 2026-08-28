@@ -1,4 +1,5 @@
-import type { GroupInfo, ParsedPostDraft, PostAuthor, PostWarning } from '../../shared/types';
+import type { CollectionInfo } from '@extractor/capture-core/domain';
+import type { ParsedPostDraft, PostAuthor, PostWarning } from '../../shared/types';
 import { DEFAULT_CAPTURE_OPTIONS, type CaptureOptions } from '../../shared/types/captureOptions';
 import { isPartialReactionBreakdown } from '../../shared/types/reactions';
 import {
@@ -452,7 +453,7 @@ function parseVisibleComments(
 
 export function parsePost(
   postElement: Element,
-  group: GroupInfo,
+  collection: CollectionInfo,
   options: CaptureOptions = DEFAULT_CAPTURE_OPTIONS,
 ): ParsedPostDraft {
   const warnings: PostWarning[] = [];
@@ -462,7 +463,7 @@ export function parsePost(
   const postUrl =
     postId === null
       ? normalizePostUrl(rawPostUrl)
-      : buildGroupPostUrl(group.url, postId);
+      : buildGroupPostUrl(collection.url, postId);
   const author = parsePostAuthor(postElement);
   const text = parsePostText(postElement);
   const date = parsePostDate(postElement);
@@ -526,9 +527,9 @@ export function parsePost(
   }
 
   return {
-    postId,
-    postUrl,
-    group,
+    externalId: postId,
+    externalUrl: postUrl,
+    collection,
     author,
     text,
     displayedDate: date.displayedDate,

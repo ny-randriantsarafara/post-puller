@@ -5,11 +5,11 @@ import {
   parseBackgroundResponse,
   type BackgroundResponse,
 } from '../../src/shared/messaging/protocol';
-import { sumGroupStats } from '../../src/shared/stats/groupStats';
+import { sumCollectionStats } from '../../src/shared/stats/collectionStats';
 
 const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'group-page.html');
-const groupUrl = 'https://www.facebook.com/groups/sample-group';
+const collectionUrl = 'https://www.facebook.com/groups/sample-group';
 
 let context: BrowserContext;
 let facebookPage: Page;
@@ -33,7 +33,7 @@ test.beforeAll(async () => {
     });
   });
 
-  await facebookPage.goto(groupUrl, { waitUntil: 'domcontentloaded' });
+  await facebookPage.goto(collectionUrl, { waitUntil: 'domcontentloaded' });
 });
 
 test.afterAll(async () => {
@@ -100,7 +100,7 @@ async function getCapturedPostCount(): Promise<number> {
     return 0;
   }
 
-  return sumGroupStats(response.session.groupStats).postCount;
+  return sumCollectionStats(response.session.collectionStats).postCount;
 }
 
 test('captures visible posts, deduplicates, persists, and exports JSON', async () => {

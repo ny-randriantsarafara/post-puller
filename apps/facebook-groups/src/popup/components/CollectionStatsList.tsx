@@ -1,15 +1,15 @@
 import {
   formatPublicationWindow,
-  type GroupCaptureStats,
-} from '../../shared/stats/groupStats';
+  type CollectionCaptureStats,
+} from '../../shared/stats/collectionStats';
 
-type GroupStatsListProps = {
-  groupStats: GroupCaptureStats[];
+type CollectionStatsListProps = {
+  collectionStats: CollectionCaptureStats[];
   isBusy: boolean;
-  onClearGroup: (groupUrl: string, groupName: string | null) => void;
+  onClearCollection: (collectionUrl: string, collectionName: string | null) => void;
 };
 
-function formatGroupLabel(group: GroupCaptureStats['group']): string {
+function formatCollectionLabel(group: CollectionCaptureStats['collection']): string {
   if (group.name !== null && group.name.trim().length > 0) {
     return group.name;
   }
@@ -22,12 +22,12 @@ function formatGroupLabel(group: GroupCaptureStats['group']): string {
   return 'Unknown group';
 }
 
-export function GroupStatsList({
-  groupStats,
+export function CollectionStatsList({
+  collectionStats,
   isBusy,
-  onClearGroup,
-}: GroupStatsListProps) {
-  if (groupStats.length === 0) {
+  onClearCollection,
+}: CollectionStatsListProps) {
+  if (collectionStats.length === 0) {
     return null;
   }
 
@@ -35,16 +35,16 @@ export function GroupStatsList({
     <section className="popup__group-stats">
       <h2 className="popup__group-stats-title">Stored by group</h2>
       <ul className="popup__group-stats-list">
-        {groupStats.map((groupStat) => {
-          const groupLabel = formatGroupLabel(groupStat.group);
+        {collectionStats.map((collectionStat) => {
+          const groupLabel = formatCollectionLabel(collectionStat.collection);
 
           return (
-            <li className="popup__group-stats-item" key={groupStat.group.url}>
+            <li className="popup__group-stats-item" key={collectionStat.collection.url}>
               <div className="popup__group-stats-summary">
                 <span className="popup__group-stats-name">{groupLabel}</span>
                 <span className="popup__group-stats-counts">
-                  {groupStat.postCount} posts · {groupStat.incompletePostCount} incomplete ·{' '}
-                  {formatPublicationWindow(groupStat.publicationWindow)}
+                  {collectionStat.postCount} posts · {collectionStat.incompletePostCount} incomplete ·{' '}
+                  {formatPublicationWindow(collectionStat.publicationWindow)}
                 </span>
               </div>
               <button
@@ -52,7 +52,7 @@ export function GroupStatsList({
                 className="button button--danger popup__group-stats-clear"
                 disabled={isBusy}
                 onClick={() => {
-                  onClearGroup(groupStat.group.url, groupStat.group.name);
+                  onClearCollection(collectionStat.collection.url, collectionStat.collection.name);
                 }}
               >
                 Clear

@@ -1,6 +1,6 @@
+import type { CollectionCaptureStats } from '../stats/collectionStats';
 import type { CaptureOptions } from './captureOptions';
 import { DEFAULT_CAPTURE_OPTIONS } from './captureOptions';
-import type { GroupCaptureStats } from '../stats/groupStats';
 
 export type CaptureStatus = 'idle' | 'capturing' | 'interrupted';
 
@@ -14,12 +14,12 @@ export type CaptureSession = {
   // Capture keeps running, so anything Facebook loads afterwards is still stored.
   autoScrollCompletedAt: string | null;
   tabId: number | null;
-  groupUrl: string | null;
-  groupName: string | null;
+  collectionUrl: string | null;
+  collectionName: string | null;
   startedAt: string | null;
   stoppedAt: string | null;
   interruptedAt: string | null;
-  groupStats: GroupCaptureStats[];
+  collectionStats: CollectionCaptureStats[];
 };
 
 export const EMPTY_CAPTURE_SESSION: CaptureSession = {
@@ -28,10 +28,10 @@ export const EMPTY_CAPTURE_SESSION: CaptureSession = {
   options: DEFAULT_CAPTURE_OPTIONS,
   autoScrollCompletedAt: null,
   tabId: null,
-  groupUrl: null,
-  groupName: null,
+  collectionUrl: null,
+  collectionName: null,
   startedAt: null,
   stoppedAt: null,
   interruptedAt: null,
-  groupStats: [],
+  collectionStats: [],
 };

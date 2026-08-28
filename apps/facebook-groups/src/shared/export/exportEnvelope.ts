@@ -1,11 +1,12 @@
-import type { CapturedPost, GroupInfo } from '../types';
+import type { CollectionInfo } from '@extractor/capture-core/domain';
+import type { CapturedPost } from '../types';
 import {
   buildPublicationWindow,
-  groupPostsByGroupUrl,
+  groupPostsByCollectionUrl,
   type PublicationWindow,
-} from '../stats/groupStats';
+} from '../stats/collectionStats';
 
-export const EXPORT_SCHEMA_VERSION = 3;
+export const EXPORT_SCHEMA_VERSION = 4;
 
 export type { PublicationWindow };
 
@@ -13,7 +14,7 @@ export type ExportEnvelope = {
   schemaVersion: typeof EXPORT_SCHEMA_VERSION;
   extensionVersion: string;
   exportedAt: string;
-  group: GroupInfo;
+  collection: CollectionInfo;
   publicationWindow: PublicationWindow;
   stats: {
     postCount: number;
@@ -23,16 +24,16 @@ export type ExportEnvelope = {
   posts: CapturedPost[];
 };
 
-export type GroupExportFile = {
+export type CollectionExportFile = {
   fileName: string;
   envelope: ExportEnvelope;
 };
 
-function slugifyGroupName(group: GroupInfo): string {
+function slugifyCollectionName(collection: CollectionInfo): string {
   const source =
-    group.name !== null && group.name.trim().length > 0
-      ? group.name
-      : group.url.split('/').filter(Boolean).pop() ?? 'group';
+    collection.name !== null && collection.name.trim().length > 0
+      ? collection.name
+      : collection.url.split('/').filter(Boolean).pop() ?? 'group';
 
   const slug = source
     .normalize('NFKD')
@@ -48,12 +49,12 @@ function formatDateForFileName(isoDate: string): string {
   return isoDate.slice(0, 10);
 }
 
-function buildGroupExportFileName(
-  group: GroupInfo,
+function buildCollectionExportFileName(
+  collection: CollectionInfo,
   publicationWindow: PublicationWindow,
   exportedAt: string,
 ): string {
-  const slug = slugifyGroupName(group);
+  const slug = slugifyCollectionName(collection);
   const exportDay = formatDateForFileName(exportedAt);
 
   if (
@@ -82,9 +83,9 @@ function buildStats(posts: CapturedPost[]): ExportEnvelope['stats'] {
   };
 }
 
-export function buildGroupExportEnvelope(
+export function buildCollectionExportEnvelope(
   posts: CapturedPost[],
-  group: GroupInfo,
+  collection: CollectionInfo,
   extensionVersion: string,
   exportedAt: string,
 ): ExportEnvelope {
@@ -94,31 +95,35 @@ export function buildGroupExportEnvelope(
     schemaVersion: EXPORT_SCHEMA_VERSION,
     extensionVersion,
     exportedAt,
-    group,
+    collection,
     publicationWindow,
     stats: buildStats(posts),
     posts,
   };
 }
 
-export function buildGroupExports(
+export function buildCollectionExports(
   posts: CapturedPost[],
   extensionVersion: string,
   exportedAt: string,
-): GroupExportFile[] {
-  const postsByGroupUrl = groupPostsByGroupUrl(posts);
+): CollectionExportFile[] {
+  const postsByCollectionUrl = groupPostsByCollectionUrl(posts);
 
-  return [...postsByGroupUrl.entries()].map(([groupUrl, groupPosts]) => {
-    const group = groupPosts[0]?.group ?? { name: null, url: groupUrl };
-    const envelope = buildGroupExportEnvelope(
-      groupPosts,
-      group,
+  return [...postsByCollectionUrl.entries()].map(([collectionUrl, collectionPosts]) => {
+    const collection = collectionPosts[0]?.collection ?? { name: null, url: collectionUrl };
+    const envelope = buildCollectionExportEnvelope(
+      collectionPosts,
+      collection,
       extensionVersion,
       exportedAt,
     );
 
     return {
-      fileName: buildGroupExportFileName(group, envelope.publicationWindow, exportedAt),
+      fileName: buildCollectionExportFileName(
+        collection,
+        envelope.publicationWindow,
+        exportedAt,
+      ),
       envelope,
     };
   });
@@ -142,28 +147,14 @@ export function downloadExportEnvelope(
   URL.revokeObjectURL(objectUrl);
 }
 
-export function downloadGroupExports(
+export function downloadCollectionExports(
   posts: CapturedPost[],
   extensionVersion: string,
   exportedAt: string,
 ): void {
-  const exports = buildGroupExports(posts, extensionVersion, exportedAt);
+  const exports = buildCollectionExports(posts, extensionVersion, exportedAt);
 
-  for (const groupExport of exports) {
-    downloadExportEnvelope(groupExport.envelope, groupExport.fileName);
+  for (const collectionExport of exports) {
+    downloadExportEnvelope(collectionExport.envelope, collectionExport.fileName);
   }
-}
-
-// Kept for callers that still expect a single combined envelope during migration.
-export function buildExportEnvelope(
-  posts: CapturedPost[],
-  extensionVersion: string,
-  exportedAt: string,
-): ExportEnvelope {
-  const primaryGroup = posts[0]?.group ?? {
-    name: null,
-    url: 'https://www.facebook.com/groups/unknown',
-  };
-
-  return buildGroupExportEnvelope(posts, primaryGroup, extensionVersion, exportedAt);
 }

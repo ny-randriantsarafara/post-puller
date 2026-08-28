@@ -58,7 +58,7 @@ describe('FeedObserver', () => {
     observer.stop();
 
     expect(capturedBatches.flat()).toHaveLength(1);
-    expect(capturedBatches.flat()[0]?.postId).toBe('1855528195424558');
+    expect(capturedBatches.flat()[0]?.externalId).toBe('1855528195424558');
     expect(capturedBatches.flat()[0]?.warnings).toContain('TRUNCATED_TEXT');
   });
 
@@ -116,7 +116,7 @@ describe('FeedObserver', () => {
     await vi.advanceTimersByTimeAsync(FLUSH_MS);
     observer.stop();
 
-    const capturedPostIds = capturedBatches.flat().map((post) => post.postId);
+    const capturedPostIds = capturedBatches.flat().map((post) => post.externalId);
     expect(capturedPostIds).toEqual(['1001']);
   });
 
@@ -143,7 +143,7 @@ describe('FeedObserver', () => {
 
     observer.stop();
 
-    expect(capturedBatches.flat().map((post) => post.postId)).toContain('1001');
+    expect(capturedBatches.flat().map((post) => post.externalId)).toContain('1001');
   });
 
   it('captures while the post itself keeps mutating', async () => {
@@ -163,7 +163,7 @@ describe('FeedObserver', () => {
 
     observer.stop();
 
-    expect(capturedBatches.flat().map((post) => post.postId)).toContain('1001');
+    expect(capturedBatches.flat().map((post) => post.externalId)).toContain('1001');
   });
 
   it('recaptures a post when expansion only swaps its message text', async () => {
@@ -234,7 +234,7 @@ describe('FeedObserver', () => {
     await vi.advanceTimersByTimeAsync(FEED_RECHECK_MS);
     observer.stop();
 
-    const capturedPostIds = capturedBatches.flat().map((post) => post.postId);
+    const capturedPostIds = capturedBatches.flat().map((post) => post.externalId);
     expect(capturedPostIds).toContain('1855528195424558');
     expect(capturedPostIds).toContain('1855546442089400');
   });

@@ -1,11 +1,7 @@
+export type { Attachment } from './attachment';
+export type { PostAuthor } from './author';
 export type { CapturedComment } from './comment';
-export type { PostAuthor, Attachment } from './comment';
-export type {
-  CapturedPost,
-  GroupInfo,
-  IdentitySource,
-  ParsedPostDraft,
-} from './post';
+export type { CapturedPost, ParsedPostDraft } from './post';
 export type { CaptureOptions } from './captureOptions';
 export { DEFAULT_CAPTURE_OPTIONS } from './captureOptions';
 export type {
@@ -18,4 +14,3 @@ export type { ReactionBreakdown, ReactionType } from './reactions';
 export { REACTION_TYPES, sumReactionBreakdown } from './reactions';
 export type { CommentWarning, PostWarning } from './warnings';
 export { COMMENT_WARNINGS, POST_WARNINGS } from './warnings';
-export type { GroupCaptureStats, GroupStatsTotals, PublicationWindow } from '../stats/groupStats';
