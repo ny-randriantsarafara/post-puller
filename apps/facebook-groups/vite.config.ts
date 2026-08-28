@@ -1,4 +1,3 @@
-/// <reference types="vitest/config" />
 import { crx } from '@crxjs/vite-plugin';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -13,10 +12,5 @@ export default defineConfig({
         preview: 'src/preview/index.html',
       },
     },
-  },
-  test: {
-    environment: 'jsdom',
-    setupFiles: ['./tests/setup.ts'],
-    include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
   },
 });
