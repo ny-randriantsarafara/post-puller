@@ -222,7 +222,7 @@ describe('postRepository', () => {
   it('keeps expanded comments when a later sighting only shows one comment', async () => {
     await clearPosts();
     const basePost = createSamplePost(8);
-    const expanded = {
+    const expanded: CapturedPost = {
       ...basePost,
       comments: [
         {

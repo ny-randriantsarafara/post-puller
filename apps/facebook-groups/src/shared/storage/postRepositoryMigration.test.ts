@@ -6,8 +6,14 @@ const DATABASE_NAME = 'facebookGroupCapture';
 const LEGACY_DATABASE_VERSION = 1;
 const STORE_NAME = 'capturedPosts';
 
-// Exactly what the version before fingerprinting wrote: no fingerprint field.
-const legacyPost: Omit<CapturedPost, 'fingerprint'> = {
+// Exactly what the version before fingerprinting wrote: no fingerprint, and
+// none of the engagement fields that came with it.
+type LegacyStoredPost = Omit<
+  CapturedPost,
+  'fingerprint' | 'reactionBreakdown' | 'commentCount' | 'shareCount'
+>;
+
+const legacyPost: LegacyStoredPost = {
   identityKey: 'postId:1',
   identitySource: 'postId',
   postId: '1',
