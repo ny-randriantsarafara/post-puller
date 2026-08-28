@@ -21,6 +21,7 @@
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.7.1",
     "@eslint/js": "^9.32.0",
+    "@extractor/tsconfig": "workspace:*",
     "@playwright/test": "^1.54.2",
     "@types/chrome": "^0.1.1",
     "@types/node": "^26.2.0",

@@ -1,16 +1,4 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-    "strict": true,
-    "resolveJsonModule": true
-  },
+  "extends": "@extractor/tsconfig/node.json",
   "include": ["vite.config.ts", "manifest.config.ts", "playwright.config.ts"]
 }
