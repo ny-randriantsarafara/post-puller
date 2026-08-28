@@ -6,7 +6,9 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  apps/facebook-groups:
     dependencies:
       react:
         specifier: ^19.1.0

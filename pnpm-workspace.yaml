@@ -1,0 +1,7 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm 10 blocks lifecycle scripts by default; esbuild needs its own to run.
+onlyBuiltDependencies:
+  - esbuild
