@@ -1,0 +1,7 @@
+{
+  "extends": "@extractor/tsconfig/browser.json",
+  "compilerOptions": {
+    "types": ["chrome", "node"]
+  },
+  "include": ["src/**/*.test.ts", "vitest.config.ts"]
+}

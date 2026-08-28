@@ -1,0 +1,32 @@
+{
+  "name": "@extractor/capture-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./result": "./src/result.ts",
+    "./errorMessage": "./src/errorMessage.ts",
+    "./identity": "./src/identity/index.ts",
+    "./time": "./src/time/index.ts",
+    "./testing/setup": "./src/testing/setup.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "fake-indexeddb": "^6.0.1"
+  },
+  "devDependencies": {
+    "@extractor/eslint-config": "workspace:*",
+    "@extractor/tsconfig": "workspace:*",
+    "@types/chrome": "^0.1.1",
+    "@types/node": "^26.2.0",
+    "eslint": "^9.32.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

@@ -6,7 +6,7 @@ import {
 import {
   detectRelativeDateLocale,
   parseRelativeDate,
-} from '../../shared/time/relativeDate';
+} from '@extractor/capture-core/time';
 import { readTrimmedText } from './domText';
 import { parseCommentEngagement } from './parseEngagement';
 import {

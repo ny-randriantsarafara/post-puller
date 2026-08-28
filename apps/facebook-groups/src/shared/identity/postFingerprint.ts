@@ -1,4 +1,4 @@
-import { normalizeWhitespace, sha256Hex } from './contentHash';
+import { normalizeWhitespace, sha256Hex } from '@extractor/capture-core/identity';
 
 // A post without a Facebook id is stored under a hash of its author, text and
 // displayed date. Both the text and the date change between two sightings of the

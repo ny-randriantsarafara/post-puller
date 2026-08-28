@@ -10,7 +10,7 @@ import {
 import {
   detectRelativeDateLocale,
   parseRelativeDate,
-} from '../../shared/time/relativeDate';
+} from '@extractor/capture-core/time';
 import {
   readAccessibleText,
   readReferencedSvgText,

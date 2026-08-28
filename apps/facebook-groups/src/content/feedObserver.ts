@@ -3,7 +3,7 @@ import {
   DEFAULT_CAPTURE_OPTIONS,
   type CaptureOptions,
 } from '../shared/types/captureOptions';
-import { toErrorMessage } from '../shared/errorMessage';
+import { toErrorMessage } from '@extractor/capture-core/errorMessage';
 import {
   finalizeCapturedPost,
   retainCapturedIdentity,

@@ -1,5 +1,5 @@
-import { toErrorMessage } from '../errorMessage';
-import { err, ok, type Result } from '../result';
+import { toErrorMessage } from '@extractor/capture-core/errorMessage';
+import { err, ok, type Result } from '@extractor/capture-core/result';
 import {
   parseBackgroundResponse,
   type BackgroundRequest,

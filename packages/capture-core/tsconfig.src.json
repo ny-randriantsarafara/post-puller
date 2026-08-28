@@ -1,0 +1,10 @@
+{
+  "extends": "@extractor/tsconfig/browser.json",
+  "compilerOptions": {
+    // No jsx on purpose: nothing here may pull React into a service worker or
+    // content script bundle.
+    "types": ["chrome"]
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

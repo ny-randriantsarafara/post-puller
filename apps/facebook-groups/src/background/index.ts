@@ -1,4 +1,4 @@
-import { toErrorMessage } from '../shared/errorMessage';
+import { toErrorMessage } from '@extractor/capture-core/errorMessage';
 import { handleBackgroundMessage, registerLifecycleHandlers } from './captureCoordinator';
 
 registerLifecycleHandlers();

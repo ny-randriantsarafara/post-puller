@@ -16,8 +16,8 @@ import {
   type ContentResponse,
 } from '../shared/messaging/protocol';
 import { trySendTabRequest } from '../shared/messaging/client';
-import { toErrorMessage } from '../shared/errorMessage';
-import { err, ok, type Result } from '../shared/result';
+import { toErrorMessage } from '@extractor/capture-core/errorMessage';
+import { err, ok, type Result } from '@extractor/capture-core/result';
 import { readCaptureSession, writeCaptureSession } from './sessionStore';
 
 const CONTENT_SCRIPT_UNREACHABLE_MESSAGE =

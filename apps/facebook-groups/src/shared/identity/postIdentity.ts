@@ -1,4 +1,4 @@
-import { createContentHash } from './contentHash';
+import { createContentHash } from '@extractor/capture-core/identity';
 import { createPostFingerprint } from './postFingerprint';
 import { extractPostIdFromElement, extractPostIdFromUrl, normalizePostUrl } from './postUrl';
 import type { CapturedPost, IdentitySource, ParsedPostDraft } from '../types';
