@@ -74,6 +74,9 @@ importers:
       '@extractor/capture-core':
         specifier: workspace:*
         version: link:../../packages/capture-core
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       '@extractor/eslint-config':
         specifier: workspace:*
@@ -90,6 +93,9 @@ importers:
       eslint:
         specifier: ^9.32.0
         version: 9.39.5
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0

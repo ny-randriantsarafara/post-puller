@@ -31,6 +31,11 @@ export type SiteAdapter<
   findRenderedItemRoots: (root: Element) => Element[];
   findContainingItemRoot: (node: Node | null) => Element | null;
   isCapturableItemRoot: (element: Element) => boolean;
+  // Called once before each batch is parsed, for a site whose items cannot be
+  // read one at a time. A Messenger message takes its date from a separator
+  // rendered above it, so the mapping from row to date has to be built from the
+  // container in document order, and rebuilt whenever the rendered window moves.
+  beginBatch?: () => void;
   captureItem: (
     itemRoot: Element,
     collection: CollectionInfo,

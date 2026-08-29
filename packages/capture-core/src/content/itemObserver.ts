@@ -257,6 +257,8 @@ export class ItemObserver<
     const elements = [...this.pendingElements];
     this.pendingElements.clear();
 
+    this.adapter.beginBatch?.();
+
     for (const element of elements) {
       if (!this.adapter.isCapturableItemRoot(element)) {
         continue;
