@@ -1,6 +1,22 @@
+import { ItemObserver } from '@extractor/capture-core/content';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CapturedPost } from '../shared/types';
-import { FeedObserver } from './feedObserver';
+import { DEFAULT_CAPTURE_OPTIONS } from '../shared/types/captureOptions';
+import type { CaptureOptions } from '../shared/types/captureOptions';
+import { facebookSiteAdapter } from './facebookSiteAdapter';
+
+// Exercises the generic observer through the Facebook adapter, which is the
+// combination that actually ships. The core has its own test with a synthetic
+// adapter; this one keeps the real selectors and parser in the loop.
+function createObserver(
+  onItemsCaptured: (posts: CapturedPost[]) => void,
+): ItemObserver<CapturedPost, CaptureOptions> {
+  return new ItemObserver({
+    adapter: facebookSiteAdapter,
+    defaultOptions: DEFAULT_CAPTURE_OPTIONS,
+    callbacks: { onItemsCaptured, onInterrupted: () => undefined },
+  });
+}
 
 const FLUSH_MS = 1000;
 const FEED_RECHECK_MS = 3000;
@@ -35,7 +51,7 @@ function readPostElement(): Element {
   return postElement;
 }
 
-describe('FeedObserver', () => {
+describe('ItemObserver on the Facebook adapter', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     window.history.pushState({}, '', '/groups/sample-group');
@@ -48,10 +64,7 @@ describe('FeedObserver', () => {
   it('captures a truncated post instead of waiting for text expansion', async () => {
     renderFeed('Truncated text…');
     const capturedBatches: CapturedPost[][] = [];
-    const observer = new FeedObserver({
-      onPostsCaptured: (posts) => capturedBatches.push(posts),
-      onInterrupted: () => undefined,
-    });
+    const observer = createObserver((posts) => capturedBatches.push(posts));
 
     observer.start();
     await vi.advanceTimersByTimeAsync(FLUSH_MS);
@@ -64,10 +77,7 @@ describe('FeedObserver', () => {
 
   it('stops expanding a post once its click budget is spent, even when Facebook replaces the post node', async () => {
     renderFeed('Truncated text…');
-    const observer = new FeedObserver({
-      onPostsCaptured: () => undefined,
-      onInterrupted: () => undefined,
-    });
+    const observer = createObserver(() => undefined);
     const clickedLabels: string[] = [];
     document.addEventListener('click', (event) => {
       if (event.target instanceof HTMLElement) {
@@ -97,10 +107,7 @@ describe('FeedObserver', () => {
       </div>
     `;
     const capturedBatches: CapturedPost[][] = [];
-    const observer = new FeedObserver({
-      onPostsCaptured: (posts) => capturedBatches.push(posts),
-      onInterrupted: () => undefined,
-    });
+    const observer = createObserver((posts) => capturedBatches.push(posts));
 
     observer.start();
 
@@ -123,10 +130,7 @@ describe('FeedObserver', () => {
   it('captures while unrelated feed churn keeps arriving', async () => {
     document.body.innerHTML = `<div role="feed">${renderStory('1001', 'Post')}</div>`;
     const capturedBatches: CapturedPost[][] = [];
-    const observer = new FeedObserver({
-      onPostsCaptured: (posts) => capturedBatches.push(posts),
-      onInterrupted: () => undefined,
-    });
+    const observer = createObserver((posts) => capturedBatches.push(posts));
     const feed = document.querySelector('[role="feed"]');
     if (feed === null) {
       throw new Error('Feed fixture is invalid');
@@ -149,10 +153,7 @@ describe('FeedObserver', () => {
   it('captures while the post itself keeps mutating', async () => {
     document.body.innerHTML = `<div role="feed">${renderStory('1001', 'Post')}</div>`;
     const capturedBatches: CapturedPost[][] = [];
-    const observer = new FeedObserver({
-      onPostsCaptured: (posts) => capturedBatches.push(posts),
-      onInterrupted: () => undefined,
-    });
+    const observer = createObserver((posts) => capturedBatches.push(posts));
 
     observer.start();
 
@@ -169,10 +170,7 @@ describe('FeedObserver', () => {
   it('recaptures a post when expansion only swaps its message text', async () => {
     renderFeed('Truncated text…');
     const capturedBatches: CapturedPost[][] = [];
-    const observer = new FeedObserver({
-      onPostsCaptured: (posts) => capturedBatches.push(posts),
-      onInterrupted: () => undefined,
-    });
+    const observer = createObserver((posts) => capturedBatches.push(posts));
 
     observer.start();
     await vi.advanceTimersByTimeAsync(FLUSH_MS);
@@ -195,10 +193,7 @@ describe('FeedObserver', () => {
   it('does not click See more when expandPostText is disabled', async () => {
     renderFeed('Truncated text…');
     const capturedBatches: CapturedPost[][] = [];
-    const observer = new FeedObserver({
-      onPostsCaptured: (posts) => capturedBatches.push(posts),
-      onInterrupted: () => undefined,
-    });
+    const observer = createObserver((posts) => capturedBatches.push(posts));
 
     observer.start({
       options: {
@@ -218,10 +213,7 @@ describe('FeedObserver', () => {
   it('keeps capturing after Facebook replaces the feed container', async () => {
     renderFeed('First post');
     const capturedBatches: CapturedPost[][] = [];
-    const observer = new FeedObserver({
-      onPostsCaptured: (posts) => capturedBatches.push(posts),
-      onInterrupted: () => undefined,
-    });
+    const observer = createObserver((posts) => capturedBatches.push(posts));
 
     observer.start();
     await vi.advanceTimersByTimeAsync(FLUSH_MS);
