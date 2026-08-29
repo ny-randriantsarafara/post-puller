@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./background": "./src/background/index.ts",
     "./domain": "./src/domain/index.ts",
     "./result": "./src/result.ts",
     "./errorMessage": "./src/errorMessage.ts",

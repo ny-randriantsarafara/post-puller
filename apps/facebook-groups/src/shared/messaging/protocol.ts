@@ -212,20 +212,20 @@ function migrateLegacySession(value: unknown): unknown {
   };
 }
 
-const protocol = createCaptureProtocol<CapturedPost, CaptureOptions>({
+export const captureProtocol = createCaptureProtocol<CapturedPost, CaptureOptions>({
   itemSchema: capturedPostSchema,
   optionsSchema: captureOptionsSchema,
   migrateSession: migrateLegacySession,
 });
 
-export const captureSessionSchema = protocol.sessionSchema;
+export const captureSessionSchema = captureProtocol.sessionSchema;
 
 export type BackgroundRequest = CoreBackgroundRequest<CapturedPost, CaptureOptions>;
 export type BackgroundResponse = CoreBackgroundResponse<CaptureOptions>;
 export type ContentRequest = CoreContentRequest<CaptureOptions>;
 export type ContentResponse = CoreContentResponse;
 
-export const parseBackgroundRequest = protocol.parseBackgroundRequest;
-export const parseBackgroundResponse = protocol.parseBackgroundResponse;
-export const parseContentRequest = protocol.parseContentRequest;
-export const parseContentResponse = protocol.parseContentResponse;
+export const parseBackgroundRequest = captureProtocol.parseBackgroundRequest;
+export const parseBackgroundResponse = captureProtocol.parseBackgroundResponse;
+export const parseContentRequest = captureProtocol.parseContentRequest;
+export const parseContentResponse = captureProtocol.parseContentResponse;

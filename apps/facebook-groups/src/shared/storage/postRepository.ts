@@ -3,7 +3,9 @@ import { facebookGroupsDomain } from '../domain';
 import type { CollectionCaptureStats } from '../stats/collectionStats';
 import type { CapturedPost } from '../types';
 
-const repository = createItemRepository(facebookGroupsDomain);
+export const postRepository = createItemRepository(facebookGroupsDomain);
+
+const repository = postRepository;
 
 export type PostPage = {
   posts: CapturedPost[];
