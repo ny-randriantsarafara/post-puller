@@ -1,0 +1,25 @@
+{
+  "name": "@extractor/messenger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.src.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@extractor/capture-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@extractor/eslint-config": "workspace:*",
+    "@extractor/tsconfig": "workspace:*",
+    "@types/chrome": "^0.1.1",
+    "@types/node": "^26.2.0",
+    "eslint": "^9.32.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

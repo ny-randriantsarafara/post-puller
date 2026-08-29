@@ -69,6 +69,37 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@26.2.0)(jsdom@26.1.0)
 
+  apps/messenger:
+    dependencies:
+      '@extractor/capture-core':
+        specifier: workspace:*
+        version: link:../../packages/capture-core
+    devDependencies:
+      '@extractor/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@extractor/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@types/chrome':
+        specifier: ^0.1.1
+        version: 0.1.43
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      eslint:
+        specifier: ^9.32.0
+        version: 9.39.5
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@26.2.0)(jsdom@26.1.0)
+
   packages/capture-core:
     dependencies:
       fake-indexeddb:

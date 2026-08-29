@@ -1,0 +1,4 @@
+{
+  "extends": "@extractor/tsconfig/node.json",
+  "include": ["vitest.config.ts"]
+}
