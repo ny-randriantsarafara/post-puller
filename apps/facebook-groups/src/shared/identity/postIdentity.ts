@@ -1,10 +1,8 @@
-import { createContentHash } from '@extractor/capture-core/identity';
 import {
-  buildIdentityKey,
-  isStrongerIdentitySource,
-  type IdentityKeyPrefixes,
-  type IdentitySource,
-} from '@extractor/capture-core/domain';
+  resolveItemIdentity,
+  type ResolvedIdentity,
+} from '@extractor/capture-core/identity';
+import type { IdentityKeyPrefixes } from '@extractor/capture-core/domain';
 import { createPostFingerprint } from './postFingerprint';
 import { extractPostIdFromElement, extractPostIdFromUrl, normalizePostUrl } from './postUrl';
 import type { CapturedPost, ParsedPostDraft } from '../types';
@@ -19,12 +17,13 @@ export const POST_IDENTITY_KEY_PREFIXES: IdentityKeyPrefixes = {
   contentHash: 'contentHash',
 };
 
-export type PostIdentity = {
-  identityKey: string;
-  identitySource: IdentitySource;
-  externalId: string | null;
-  externalUrl: string | null;
-};
+export type PostIdentity = ResolvedIdentity;
+
+export {
+  isStrongerIdentity,
+  retainCapturedIdentity,
+} from '@extractor/capture-core/identity';
+export { contradictsStoredIdentity } from '@extractor/capture-core/storage';
 
 export function resolveAuthorLabel(author: ParsedPostDraft['author']): string {
   if (author.kind === 'named') {
@@ -48,44 +47,15 @@ export async function resolvePostIdentity(
     postElement === null ? null : extractPostIdFromElement(postElement);
   const postId = postIdFromElement ?? postIdFromUrl ?? draft.externalId;
 
-  if (postId !== null) {
-    return {
-      identityKey: buildIdentityKey(POST_IDENTITY_KEY_PREFIXES, 'externalId', postId),
-      identitySource: 'externalId',
-      externalId: postId,
-      externalUrl: normalizedUrl,
-    };
-  }
-
-  if (normalizedUrl !== null) {
-    return {
-      identityKey: buildIdentityKey(
-        POST_IDENTITY_KEY_PREFIXES,
-        'externalUrl',
-        normalizedUrl,
-      ),
-      identitySource: 'externalUrl',
-      externalId: null,
-      externalUrl: normalizedUrl,
-    };
-  }
-
-  const contentHash = await createContentHash({
-    authorLabel: resolveAuthorLabel(draft.author),
-    text: draft.text,
-    displayedDate: draft.displayedDate,
+  return resolveItemIdentity(POST_IDENTITY_KEY_PREFIXES, {
+    externalId: postId,
+    externalUrl: normalizedUrl,
+    contentHashParts: [
+      resolveAuthorLabel(draft.author),
+      draft.text,
+      draft.displayedDate,
+    ],
   });
-
-  return {
-    identityKey: buildIdentityKey(
-      POST_IDENTITY_KEY_PREFIXES,
-      'contentHash',
-      contentHash,
-    ),
-    identitySource: 'contentHash',
-    externalId: null,
-    externalUrl: null,
-  };
 }
 
 export async function finalizeCapturedPost(
@@ -108,38 +78,6 @@ export async function finalizeCapturedPost(
   };
 }
 
-export function isStrongerIdentity(
-  existingPost: CapturedPost,
-  incomingPost: CapturedPost,
-): boolean {
-  return isStrongerIdentitySource(
-    existingPost.identitySource,
-    incomingPost.identitySource,
-  );
-}
-
-// Two sightings that both carry a Facebook id or url and disagree on it are
-// different posts, however alike their opening lines look. Merging them on a
-// matching fingerprint would lose one of them.
-export function contradictsStoredIdentity(
-  existingPost: CapturedPost,
-  incomingPost: CapturedPost,
-): boolean {
-  if (
-    existingPost.externalId !== null &&
-    incomingPost.externalId !== null &&
-    existingPost.externalId !== incomingPost.externalId
-  ) {
-    return true;
-  }
-
-  return (
-    existingPost.externalUrl !== null &&
-    incomingPost.externalUrl !== null &&
-    existingPost.externalUrl !== incomingPost.externalUrl
-  );
-}
-
 // An emptied story hashes to the same key as every other emptied story, so
 // storing one would silently overwrite an unrelated post under that key.
 export function isIdentifiableCapturedPost(post: CapturedPost): boolean {
@@ -152,19 +90,4 @@ export function isIdentifiableCapturedPost(post: CapturedPost): boolean {
   }
 
   return post.text !== null && post.text.trim().length > 0;
-}
-
-export function retainCapturedIdentity(
-  previousPost: CapturedPost,
-  incomingPost: CapturedPost,
-): CapturedPost {
-  if (previousPost.identityKey === incomingPost.identityKey) {
-    return incomingPost;
-  }
-
-  return {
-    ...incomingPost,
-    identityKey: previousPost.identityKey,
-    identitySource: previousPost.identitySource,
-  };
 }

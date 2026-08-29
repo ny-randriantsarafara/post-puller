@@ -1,25 +1,21 @@
-import { EMPTY_CAPTURE_SESSION, type CaptureSession } from '../shared/types';
+import { createSessionStore } from '@extractor/capture-core/background';
 import { captureSessionSchema } from '../shared/messaging/protocol';
+import type { CaptureSession } from '../shared/types';
+import { DEFAULT_CAPTURE_OPTIONS } from '../shared/types/captureOptions';
 
-const SESSION_STORAGE_KEY = 'captureSession';
+export const sessionStore = createSessionStore({
+  sessionSchema: captureSessionSchema,
+  defaultOptions: DEFAULT_CAPTURE_OPTIONS,
+});
 
-export async function readCaptureSession(): Promise<CaptureSession> {
-  const stored = await chrome.storage.local.get(SESSION_STORAGE_KEY);
-  const rawValue = stored[SESSION_STORAGE_KEY];
-
-  if (rawValue === undefined) {
-    return EMPTY_CAPTURE_SESSION;
-  }
-
-  return captureSessionSchema.parse(rawValue);
+export function readCaptureSession(): Promise<CaptureSession> {
+  return sessionStore.read();
 }
 
-export async function writeCaptureSession(session: CaptureSession): Promise<void> {
-  await chrome.storage.local.set({
-    [SESSION_STORAGE_KEY]: session,
-  });
+export function writeCaptureSession(session: CaptureSession): Promise<void> {
+  return sessionStore.write(session);
 }
 
-export async function resetCaptureSession(): Promise<void> {
-  await writeCaptureSession(EMPTY_CAPTURE_SESSION);
+export function resetCaptureSession(): Promise<void> {
+  return sessionStore.reset();
 }

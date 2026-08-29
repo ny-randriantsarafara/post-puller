@@ -9,24 +9,16 @@ export async function sha256Hex(value: string): Promise<string> {
   return bytes.map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-export function buildContentHashInput(input: {
-  authorLabel: string;
-  text: string | null;
-  displayedDate: string | null;
-}): string {
-  const normalizedText = input.text === null ? '' : normalizeWhitespace(input.text);
-  const normalizedDate =
-    input.displayedDate === null ? '' : normalizeWhitespace(input.displayedDate);
-  const normalizedAuthor = normalizeWhitespace(input.authorLabel);
-
-  return [normalizedAuthor, normalizedText, normalizedDate].join('\n');
+// Which parts identify an item is a domain decision: a group post is its author,
+// text and displayed date, while a message needs its thread and timestamp too.
+// A missing part still occupies its slot, so dropping a value cannot make one
+// item hash like another that genuinely has a different shape.
+export function buildHashInput(parts: readonly (string | null)[]): string {
+  return parts.map((part) => (part === null ? '' : normalizeWhitespace(part))).join('\n');
 }
 
-export async function createContentHash(input: {
-  authorLabel: string;
-  text: string | null;
-  displayedDate: string | null;
-}): Promise<string> {
-  const payload = buildContentHashInput(input);
-  return sha256Hex(payload);
+export async function createContentHash(
+  parts: readonly (string | null)[],
+): Promise<string> {
+  return sha256Hex(buildHashInput(parts));
 }

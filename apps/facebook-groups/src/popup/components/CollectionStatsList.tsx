@@ -43,7 +43,7 @@ export function CollectionStatsList({
               <div className="popup__group-stats-summary">
                 <span className="popup__group-stats-name">{groupLabel}</span>
                 <span className="popup__group-stats-counts">
-                  {collectionStat.postCount} posts · {collectionStat.incompletePostCount} incomplete ·{' '}
+                  {collectionStat.itemCount} posts · {collectionStat.incompleteItemCount} incomplete ·{' '}
                   {formatPublicationWindow(collectionStat.publicationWindow)}
                 </span>
               </div>

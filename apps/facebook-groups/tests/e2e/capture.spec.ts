@@ -100,7 +100,7 @@ async function getCapturedPostCount(): Promise<number> {
     return 0;
   }
 
-  return sumCollectionStats(response.session.collectionStats).postCount;
+  return sumCollectionStats(response.session.collectionStats).itemCount;
 }
 
 test('captures visible posts, deduplicates, persists, and exports JSON', async () => {

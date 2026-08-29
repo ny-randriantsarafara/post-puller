@@ -283,8 +283,8 @@ describe('postRepository', () => {
     const collectionStats = await listCollectionStats();
 
     expect(collectionStats).toHaveLength(2);
-    expect(collectionStats.find((stat) => stat.collection.name === 'Sample Group')?.postCount).toBe(1);
-    expect(collectionStats.find((stat) => stat.collection.name === 'Other Group')?.postCount).toBe(1);
+    expect(collectionStats.find((stat) => stat.collection.name === 'Sample Group')?.itemCount).toBe(1);
+    expect(collectionStats.find((stat) => stat.collection.name === 'Other Group')?.itemCount).toBe(1);
   });
 
   it('filters paginated posts by group url', async () => {

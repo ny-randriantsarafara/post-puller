@@ -65,6 +65,16 @@ export const MESSAGE_TIMESTAMP_PATTERNS = {
   absolute: /^(\d{1,2}) ([A-Za-z]+) (\d{4}), (\d{1,2}):(\d{2})$/,
 } as const;
 
+// The separators rendered between message groups. They use abbreviated names
+// where the accessible names on the messages use full ones, and the first shape
+// carries no date at all - which is why a separator can anchor a message only
+// sometimes, and why the messages keep their own timestamps regardless.
+export const DATE_SEPARATOR_PATTERNS = {
+  clockTime: /^(\d{1,2}):(\d{2})$/,
+  weekdayAndClockTime: /^([A-Za-z]{3,}) (\d{1,2}):(\d{2})$/,
+  absolute: /^(\d{1,2}) ([A-Za-z]{3,}) (\d{4}),? (\d{1,2}):(\d{2})$/,
+} as const;
+
 export const WEEKDAY_NAMES = [
   'Sunday',
   'Monday',

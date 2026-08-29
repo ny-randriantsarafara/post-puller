@@ -40,7 +40,8 @@ function getStatusMessage(session: CaptureSession): string | null {
 
   const activeGroupStats = findCollectionStats(session.collectionStats, session.collectionUrl);
   const incompletePostCount =
-    activeGroupStats?.incompletePostCount ?? sumCollectionStats(session.collectionStats).incompletePostCount;
+    activeGroupStats?.incompleteItemCount ??
+    sumCollectionStats(session.collectionStats).incompleteItemCount;
 
   if (incompletePostCount > 0) {
     return `${String(incompletePostCount)} captured posts may contain incomplete data.`;
@@ -213,8 +214,8 @@ export function App() {
   const totals = sumCollectionStats(session.collectionStats);
   const activeGroupStats = findCollectionStats(session.collectionStats, session.collectionUrl);
   const activeGroupLabel = getActiveGroupLabel(session);
-  const activePostCount = activeGroupStats?.postCount ?? 0;
-  const activeIncompleteCount = activeGroupStats?.incompletePostCount ?? 0;
+  const activePostCount = activeGroupStats?.itemCount ?? 0;
+  const activeIncompleteCount = activeGroupStats?.incompleteItemCount ?? 0;
 
   return (
     <main className="popup">
@@ -288,7 +289,7 @@ export function App() {
         <button
           type="button"
           className="button button--secondary"
-          disabled={totals.postCount === 0}
+          disabled={totals.itemCount === 0}
           onClick={handleOpenPreview}
         >
           Preview results
@@ -296,7 +297,7 @@ export function App() {
         <button
           type="button"
           className="button button--secondary"
-          disabled={totals.postCount === 0}
+          disabled={totals.itemCount === 0}
           onClick={() => {
             void handleExportJson();
           }}
@@ -306,7 +307,7 @@ export function App() {
         <button
           type="button"
           className="button button--danger"
-          disabled={isBusy || totals.postCount === 0}
+          disabled={isBusy || totals.itemCount === 0}
           onClick={() => {
             void handleClearData();
           }}
