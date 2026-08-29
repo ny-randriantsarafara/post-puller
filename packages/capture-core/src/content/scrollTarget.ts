@@ -19,7 +19,28 @@ export type ScrollTarget = {
   readPosition: () => ScrollPosition;
   scrollByStep: (distance: number) => void;
   readViewportHeight: () => number;
+  // Whether the target sits at the end of its direction of travel. A stall says
+  // only that the last step achieved nothing, which is equally true of a list
+  // that stopped answering; this is what separates the two.
+  hasReachedEnd: () => boolean;
 };
+
+// A few pixels of slack, because a scroll offset is fractional on a zoomed or
+// high-density display and rarely lands exactly on the end.
+const END_TOLERANCE_PX = 4;
+
+function hasReachedEnd(
+  direction: ScrollDirection,
+  scrollTop: number,
+  scrollHeight: number,
+  viewportHeight: number,
+): boolean {
+  if (direction === 'up') {
+    return scrollTop <= END_TOLERANCE_PX;
+  }
+
+  return scrollTop + viewportHeight >= scrollHeight - END_TOLERANCE_PX;
+}
 
 function projectOffset(
   direction: ScrollDirection,
@@ -57,6 +78,16 @@ export function createWindowScrollTarget(
       window.scrollBy(0, signedDistance(direction, distance));
     },
     readViewportHeight: () => window.innerHeight,
+    hasReachedEnd: () => {
+      const scroller = document.scrollingElement ?? document.documentElement;
+
+      return hasReachedEnd(
+        direction,
+        scroller.scrollTop,
+        scroller.scrollHeight,
+        window.innerHeight,
+      );
+    },
   };
 }
 
@@ -73,6 +104,13 @@ export function createElementScrollTarget(
       element.scrollBy(0, signedDistance(direction, distance));
     },
     readViewportHeight: () => element.clientHeight,
+    hasReachedEnd: () =>
+      hasReachedEnd(
+        direction,
+        element.scrollTop,
+        element.scrollHeight,
+        element.clientHeight,
+      ),
   };
 }
 

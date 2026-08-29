@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Alex Moreau</title>
+    <style>
+      body {
+        margin: 0;
+      }
+
+      /* The log itself does not scroll: an ancestor does. Finding that ancestor
+         needs real computed styles, which is why it can only be exercised here
+         and not in a unit test. */
+      #panel {
+        height: 400px;
+        overflow-y: auto;
+      }
+
+      [aria-roledescription='message'] {
+        min-height: 220px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="panel">
+      <div id="log" role="log" aria-label="Messages in conversation with Alex Moreau">
+        <div aria-hidden="true" data-scope="date_break">
+          <span dir="auto"><span>19 Aug 2026, 09:00</span></span>
+        </div>
+        <div role="article">
+          <div
+            aria-label="At 09:00, Alex Moreau: the message already on screen"
+            aria-roledescription="message"
+            data-message-id="mid.$rendered00000001"
+          >
+            <div dir="auto">the message already on screen</div>
+          </div>
+        </div>
+        <div role="article">
+          <div
+            aria-label="At 09:30, You: the reply already on screen"
+            aria-roledescription="message"
+            data-message-id="mid.$rendered00000002"
+          >
+            <div dir="auto">the reply already on screen</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Four older groups, prepended one at a time as the panel is scrolled to
+      // its top, the way Messenger loads history upward. Two carry an absolute
+      // separator and two a weekday one, so both anchoring shapes are exercised.
+      const OLDER_GROUPS = [
+        { separator: '18 Aug 2026, 21:15', at: '21:15', sender: 'Alex Moreau' },
+        { separator: 'Tue 14:51', at: '14:51', sender: 'You' },
+        { separator: '15 Jul 2026, 17:38', at: '17:38', sender: 'Alex Moreau' },
+        { separator: 'Thu 08:05', at: '08:05', sender: 'You' },
+      ];
+
+      const log = document.getElementById('log');
+      const panel = document.getElementById('panel');
+      let loadedGroups = 0;
+
+      // Scroll anchoring is not guaranteed in a synthetic page, so the offset is
+      // restored by hand: the scroller has to see prepended content as progress
+      // rather than as a stall.
+      function prependGroup(group, index) {
+        const heightBefore = panel.scrollHeight;
+
+        log.insertAdjacentHTML(
+          'afterbegin',
+          `
+            <div aria-hidden="true" data-scope="date_break">
+              <span dir="auto"><span>${group.separator}</span></span>
+            </div>
+            <div role="article">
+              <div aria-label="At ${group.at}, ${group.sender}: older message ${index}"
+                   aria-roledescription="message"
+                   data-message-id="mid.$older0000000${index}">
+                <div dir="auto">older message ${index}</div>
+              </div>
+            </div>
+          `,
+        );
+
+        panel.scrollTop += panel.scrollHeight - heightBefore;
+      }
+
+      // Messenger drops a message out of the DOM once it is well below the
+      // viewport, leaving a placeholder that holds its height. A capture that
+      // waited for the end of the scan and then read the page would find only
+      // the last few messages, which is what makes this worth simulating.
+      // Only rows below the viewport are recycled, the direction they leave in
+      // while a thread is read upward; a separator is never recycled, because
+      // Messenger keeps the one that dates the group on screen.
+      const RECYCLE_MARGIN_PX = 120;
+
+      function recycleRowsBelowViewport() {
+        const viewportBottom = panel.scrollTop + panel.clientHeight;
+
+        for (const article of log.querySelectorAll('[role="article"]')) {
+          if (article.dataset.virtualized === 'true') {
+            continue;
+          }
+
+          if (article.offsetTop < viewportBottom + RECYCLE_MARGIN_PX) {
+            continue;
+          }
+
+          article.style.height = `${article.offsetHeight}px`;
+          article.dataset.virtualized = 'true';
+          article.replaceChildren();
+        }
+      }
+
+      panel.addEventListener('scroll', () => {
+        recycleRowsBelowViewport();
+
+        if (panel.scrollTop > 8 || loadedGroups >= OLDER_GROUPS.length) {
+          return;
+        }
+
+        prependGroup(OLDER_GROUPS[loadedGroups], loadedGroups + 1);
+        loadedGroups += 1;
+      });
+
+      // The conversation opens at its newest message, as Messenger does.
+      panel.scrollTop = panel.scrollHeight;
+    </script>
+  </body>
+</html>

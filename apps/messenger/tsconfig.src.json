@@ -1,8 +1,9 @@
 {
   "extends": "@extractor/tsconfig/browser.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
     // Resolved from this package, because pnpm does not hoist @types to the root.
-    "types": ["chrome"]
+    "types": ["chrome", "vite/client"]
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"]

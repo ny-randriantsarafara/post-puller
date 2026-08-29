@@ -9,9 +9,12 @@ import {
 import { capturedThreadSchema } from '../messaging/protocol';
 import type { CapturedMessage } from '../types/capturedMessage';
 import { UNRESOLVED_SORT_KEY_PREFIX } from '../types/capturedMessage';
-import type { CapturedThread, ScanStopReason } from '../types/thread';
+import type {
+  CapturedThread,
+  ScanStopReason,
+  ThreadIdSource,
+} from '../types/thread';
 import { reachedThreadStart } from '../types/thread';
-import type { ThreadIdSource } from '../../content/threadPage';
 
 const repository = createItemRepository(messengerDomain);
 
@@ -32,7 +35,9 @@ export type ThreadScanSummary = {
   aliases: readonly string[];
   title: string | null;
   isEncryptedThread: boolean;
-  stopReason: ScanStopReason;
+  // Null while a scan is still running, so live counts can be recorded without
+  // claiming an outcome the scan has not reached.
+  stopReason: ScanStopReason | null;
   scannedAt: string;
 };
 
@@ -136,6 +141,10 @@ async function findThreadByAnyAlias(
 }
 
 export const messageRepository = {
+  // The generic half, as the background coordinator expects it. Thread records
+  // are Messenger's own concern and are reached through the methods below.
+  asItemRepository: repository,
+
   isBetterParse: repository.isBetterParse,
   upsertMessages: repository.upsertItems,
   countMessages: repository.countItems,
@@ -261,8 +270,8 @@ export const messageRepository = {
         // partial scan must not downgrade that.
         reachedThreadStart:
           (existingThread?.reachedThreadStart ?? false) ||
-          reachedThreadStart(summary.stopReason),
-        lastStopReason: summary.stopReason,
+          (summary.stopReason !== null && reachedThreadStart(summary.stopReason)),
+        lastStopReason: summary.stopReason ?? existingThread?.lastStopReason ?? null,
         firstScannedAt: existingThread?.firstScannedAt ?? summary.scannedAt,
         lastScannedAt: summary.scannedAt,
         oldestSentAt: boundaries.oldestSentAt,
@@ -271,23 +280,6 @@ export const messageRepository = {
 
       await requestValue(threadStore.put(thread));
       return thread;
-    });
-  },
-
-  // The keys a re-scan already holds. While every row in the viewport is one of
-  // these, the scroller can move in long strides instead of dwelling.
-  listThreadIdentityKeys: async (threadId: string): Promise<string[]> => {
-    return repository.read([MESSAGE_STORE_NAME], async (stores) => {
-      // An index's getAllKeys yields the primary keys of the matching records,
-      // which for this store are the identity keys.
-      const keys = await requestValue(
-        stores
-          .get(MESSAGE_STORE_NAME)
-          .index(THREAD_SORT_INDEX)
-          .getAllKeys(threadRange(threadId)),
-      );
-
-      return keys.filter((key): key is string => typeof key === 'string');
     });
   },
 };

@@ -1,8 +1,4 @@
-import {
-  createElementScrollTarget,
-  type ScrollTarget,
-  type SiteAdapter,
-} from '@extractor/capture-core/content';
+import type { SiteAdapter } from '@extractor/capture-core/content';
 import { retainCapturedIdentity } from '@extractor/capture-core/identity';
 import { isBetterCapturedMessage } from '../shared/captureQuality';
 import {
@@ -21,61 +17,35 @@ import {
 import { findMessageElements, parseMessage } from './parsing/parseMessage';
 import { SELECTORS } from './parsing/selectors';
 import { resolveThreadPageTarget, resolveThreadTarget } from './threadPage';
+import type { ThreadScan } from './threadScan';
+import { resolveThreadScrollTarget } from './threadScrollTarget';
 
 // Bounded because it is the only thing that accumulates over a scan that can run
 // for an hour. Past the cap, identical short messages stop being separable and
 // say so in a warning rather than being silently merged.
 const MAX_DUPLICATE_BUCKETS = 50_000;
 
-// The thread id the current scan writes under. It is resolved once by the
-// background worker, which knows the thread's aliases, and is not the id in the
-// URL when the same conversation was first captured under a different handle.
-export type ThreadScanState = {
-  canonicalThreadId: string | null;
-};
-
-export function createThreadScanState(): ThreadScanState {
-  return { canonicalThreadId: null };
-}
-
-// The log itself does not scroll. The element that does is an ancestor, and
-// which one cannot be known offline, so it is found by looking for the nearest
-// ancestor that actually overflows.
-export function resolveThreadScrollTarget(): ScrollTarget | null {
-  const log = document.querySelector(SELECTORS.log);
-  if (log === null) {
-    return null;
-  }
-
-  for (let element = log; element.parentElement !== null; ) {
-    if (element.scrollHeight > element.clientHeight + 1) {
-      return createElementScrollTarget(element, 'up');
-    }
-    element = element.parentElement;
-  }
-
-  return null;
-}
-
 function isVirtualized(element: Element): boolean {
   return element.closest(SELECTORS.virtualizedPlaceholder) !== null;
 }
 
 export function createMessengerSiteAdapter(
-  scanState: ThreadScanState,
+  scan: ThreadScan,
 ): SiteAdapter<CapturedMessage, ScanOptions> {
   const duplicateIndex = new DuplicateMessageIndex(MAX_DUPLICATE_BUCKETS);
   let anchorsByMessage = new Map<Element, DateAnchor>();
 
   function resolveThreadId(): string {
     const fromUrl = resolveThreadTarget().threadId;
-    return scanState.canonicalThreadId ?? fromUrl ?? 'unknown-thread';
+    return scan.canonicalThreadId ?? fromUrl ?? 'unknown-thread';
   }
 
   return {
     resolvePageTarget: () => resolveThreadPageTarget(),
 
     resolveObservedRoot: () => document.querySelector(SELECTORS.log),
+
+    beginScan: scan.beginScan,
 
     findRenderedItemRoots: (root) => findMessageElements(root),
 
@@ -162,6 +132,8 @@ export function createMessengerSiteAdapter(
     retainIdentity: retainCapturedIdentity,
     isBetterCapture: isBetterCapturedMessage,
     resolveScrollTarget: resolveThreadScrollTarget,
+    shouldKeepScrolling: scan.shouldKeepScrolling,
+    onScrollingEnded: scan.onScrollingEnded,
     // Messenger renders a whole message without being asked, so there is nothing
     // to click. Keeping this empty is also what keeps a scan free of synthetic
     // clicks on the user's live session.

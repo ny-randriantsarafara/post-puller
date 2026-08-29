@@ -45,6 +45,11 @@ export function createCaptureController<
   );
 
   let isCapturing = false;
+  let isAutoScrolling = false;
+  // The options the running scan was started with. The auto-scroller reports the
+  // end of its own work without knowing them, and the adapter is asked about
+  // that end, so they are held for the length of the scan.
+  let scanOptions = defaultOptions;
 
   // The extension can be reloaded or removed while this script still runs in the
   // page. Capture then stops instead of leaving rejected promises behind.
@@ -58,6 +63,18 @@ export function createCaptureController<
     });
   }
 
+  // Scrolling stops, but capture stays on so that anything the site loads
+  // afterwards is still stored.
+  function endAutoScroll(didExhaustList: boolean): void {
+    if (!isAutoScrolling) {
+      return;
+    }
+
+    isAutoScrolling = false;
+    autoScroller.stop();
+    adapter.onScrollingEnded?.(didExhaustList, scanOptions);
+  }
+
   const observer = new ItemObserver<TItem, TOptions>({
     adapter,
     defaultOptions,
@@ -65,22 +82,26 @@ export function createCaptureController<
     callbacks: {
       onItemsCaptured: (items) => {
         notifyBackground({ type: 'ITEMS_CAPTURED', tabId: 0, items });
+
+        if (isAutoScrolling && adapter.shouldKeepScrolling?.(items, scanOptions) === false) {
+          endAutoScroll(false);
+        }
       },
       onInterrupted: () => {
         isCapturing = false;
+        isAutoScrolling = false;
         autoScroller.stop();
       },
     },
   });
 
-  // Scrolling stops, but capture stays on so that anything the site loads
-  // afterwards is still stored.
   const autoScroller = new AutoScroller({
     resolveScrollTarget: adapter.resolveScrollTarget,
     timing: resolvedTiming,
     callbacks: {
       onExhausted: () => {
         notifyBackground({ type: 'AUTO_SCROLL_COMPLETED', tabId: 0 });
+        endAutoScroll(true);
       },
     },
   });
@@ -91,21 +112,26 @@ export function createCaptureController<
     }
 
     isCapturing = true;
+    scanOptions = options;
+    adapter.beginScan?.(options);
     observer.start({ options });
 
     if (mode === 'auto') {
+      isAutoScrolling = true;
       autoScroller.start();
     }
   }
 
   function endCapture(): void {
     isCapturing = false;
+    isAutoScrolling = false;
     observer.stop();
     autoScroller.stop();
   }
 
   function interruptCapture(): void {
     isCapturing = false;
+    isAutoScrolling = false;
     observer.interrupt();
     notifyBackground({ type: 'CAPTURE_INTERRUPTED', tabId: 0 });
   }

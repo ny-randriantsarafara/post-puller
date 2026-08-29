@@ -1,4 +1,10 @@
+import {
+  resolveThreadIdSource,
+  type ThreadIdSource,
+} from '../shared/types/thread';
 import { SELECTORS } from './parsing/selectors';
+
+export type { ThreadIdSource };
 
 // A thread is reachable under two origins with different path prefixes, and the
 // <id> segment is the same under both. Stripping the origin and the prefix is
@@ -11,14 +17,6 @@ const THREAD_PATH_PATTERNS = [
 ];
 
 const ENCRYPTED_PATH_PATTERN = /^(?:\/messages)?\/e2ee\/t\//;
-
-const NUMERIC_THREAD_ID = /^\d{5,}$/;
-
-// The id in the URL is stable across surfaces but not within one: the same
-// conversation is reachable under a numeric id and under a vanity handle. The
-// numeric form wins, and the repository promotes a thread that was first stored
-// under the weaker one.
-export type ThreadIdSource = 'threadTitle' | 'vanity' | 'numeric';
 
 export type ThreadTarget = {
   readonly isThreadPage: boolean;
@@ -48,13 +46,7 @@ function readThreadIdFromPath(pathname: string): string | null {
   return null;
 }
 
-export function resolveThreadIdSource(threadId: string): ThreadIdSource {
-  if (NUMERIC_THREAD_ID.test(threadId)) {
-    return 'numeric';
-  }
-
-  return 'vanity';
-}
+export { resolveThreadIdSource };
 
 function readThreadTitle(documentLike: Document): string | null {
   const log = documentLike.querySelector(SELECTORS.log);

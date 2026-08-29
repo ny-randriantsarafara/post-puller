@@ -22,13 +22,17 @@ All captured data stays on your computer. The extension does not send data to an
 ## Requirements
 
 - Node.js 20+
+- pnpm 10+
 - Google Chrome or Chromium
 
 ## Install for development
 
+Run from this directory, or from the repository root with
+`pnpm --filter @extractor/facebook-groups <script>`.
+
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 Load the unpacked extension from the generated `dist` directory:
@@ -41,7 +45,7 @@ Load the unpacked extension from the generated `dist` directory:
 For development with hot reload:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Then load the extension from the `dist` folder created by Vite.
@@ -224,7 +228,7 @@ To refresh fixtures from a real page:
 2. Save the rendered HTML for one or more posts
 3. Replace or add files under `src/content/parsing/__fixtures__/`
 4. Keep ARIA-based structure such as `[role="feed"]` and `[role="article"]`
-5. Run `npm test`
+5. Run `pnpm test`
 
 For end-to-end coverage, update [`tests/fixtures/group-page.html`](tests/fixtures/group-page.html)
 for manual capture, or [`tests/fixtures/growing-group-page.html`](tests/fixtures/growing-group-page.html)
@@ -233,19 +237,23 @@ for automatic scan.
 ## Scripts
 
 ```bash
-npm run dev
-npm run build
-npm test
-npm run test:e2e
-npm run lint
-npm run check:no-network
+pnpm dev
+pnpm build
+pnpm test
+pnpm test:e2e
+pnpm typecheck
+pnpm lint
 ```
+
+The no-network guard covers every workspace at once and therefore lives at the repository
+root: `pnpm check:no-network`.
 
 ## Local-only guarantee
 
 - No analytics endpoints
 - No remote code loading
-- No outbound network calls in extension source (`npm run check:no-network`)
+- No outbound network calls in extension source (`pnpm check:no-network` at the repository
+  root)
 - Storage uses extension-local IndexedDB and `chrome.storage.local`
 - Permissions are `storage`, `tabs`, `webNavigation`, and `scripting`, all limited to
   `*://*.facebook.com/*` by the host permissions

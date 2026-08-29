@@ -31,6 +31,10 @@ export type SiteAdapter<
   findRenderedItemRoots: (root: Element) => Element[];
   findContainingItemRoot: (node: Node | null) => Element | null;
   isCapturableItemRoot: (element: Element) => boolean;
+  // Called once when a scan starts, before anything is observed, for a site that
+  // keeps per-scan state. Two scans can run in the same page without a reload,
+  // so anything counted over a scan has to be told where one begins.
+  beginScan?: (options: TOptions) => void;
   // Called once before each batch is parsed, for a site whose items cannot be
   // read one at a time. A Messenger message takes its date from a separator
   // rendered above it, so the mapping from row to date has to be built from the
@@ -47,5 +51,14 @@ export type SiteAdapter<
   retainIdentity: (previousItem: TItem, incomingItem: TItem) => TItem;
   isBetterCapture: (existingItem: TItem, incomingItem: TItem) => boolean;
   resolveScrollTarget: () => ScrollTarget | null;
+  // Consulted after each batch while the scan is scrolling itself. Returning
+  // false stops the scrolling and leaves capture on, exactly as running out of
+  // list does. This is where a site enforces the bounds a user asked for, which
+  // are read from the items themselves rather than from a running total.
+  shouldKeepScrolling?: (items: readonly TItem[], options: TOptions) => boolean;
+  // Called when the scrolling ends while capture continues, with whether the
+  // list itself ran out. Only the page can tell a list that is genuinely
+  // finished from one that stopped answering, so that conclusion is drawn here.
+  onScrollingEnded?: (didExhaustList: boolean, options: TOptions) => void;
   readonly expansions: readonly ExpansionRule<TItem, TOptions>[];
 };

@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['@extractor/capture-core/testing/setup'],
-    include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
+    // Playwright owns tests/e2e, so vitest must not collect it.
+    include: ['src/**/*.test.ts'],
   },
 });

@@ -4,11 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { CollectionInfo } from '@extractor/capture-core/domain';
 import type { CapturedMessage } from '../shared/types/capturedMessage';
 import { DEFAULT_SCAN_OPTIONS } from '../shared/types/scanOptions';
-import {
-  createMessengerSiteAdapter,
-  createThreadScanState,
-  type ThreadScanState,
-} from './messengerSiteAdapter';
+import { createMessengerSiteAdapter } from './messengerSiteAdapter';
+import { createThreadScan, type ThreadScan } from './threadScan';
 
 const THREAD_ID = '61550123456789';
 const COLLECTION: CollectionInfo = {
@@ -23,9 +20,9 @@ function loadThread(name: string): void {
   document.body.innerHTML = readFileSync(join(fixturesDirectory, name), 'utf8');
 }
 
-function createAdapter(scanState: ThreadScanState = createThreadScanState()) {
-  scanState.canonicalThreadId = scanState.canonicalThreadId ?? THREAD_ID;
-  return createMessengerSiteAdapter(scanState);
+function createAdapter(scan: ThreadScan = createThreadScan()) {
+  scan.setCanonicalThreadId(scan.canonicalThreadId ?? THREAD_ID);
+  return createMessengerSiteAdapter(scan);
 }
 
 // Runs one batch the way the observer does: rebuild the anchor index, then
@@ -131,16 +128,15 @@ describe('messengerSiteAdapter', () => {
   // records even when reached by its numeric id.
   it('writes under the canonical thread id rather than the one in the url', async () => {
     loadThread('thread-same-day.html');
-    const scanState = createThreadScanState();
-    scanState.canonicalThreadId = 'alice.dupont';
+    const scan = createThreadScan();
+    scan.setCanonicalThreadId('alice.dupont');
 
-    const messages = await captureThread(createMessengerSiteAdapter(scanState));
+    const messages = await captureThread(createMessengerSiteAdapter(scan));
 
     for (const message of messages) {
       expect(message.threadId).toBe('alice.dupont');
     }
   });
-
 });
 
 describe('messengerSiteAdapter timestamp anchoring', () => {

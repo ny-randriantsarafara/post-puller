@@ -236,12 +236,12 @@ describe('messageRepository thread records', () => {
     });
     const second = await messageRepository.recordThreadScan({
       ...base,
-      stopReason: 'stepCap',
+      stopReason: 'userLimit',
       scannedAt: '2026-08-30T09:00:00.000Z',
     });
 
     expect(second.reachedThreadStart).toBe(true);
-    expect(second.lastStopReason).toBe('stepCap');
+    expect(second.lastStopReason).toBe('userLimit');
     expect(second.firstScannedAt).toBe('2026-08-29T09:00:00.000Z');
     expect(second.lastScannedAt).toBe('2026-08-30T09:00:00.000Z');
   });
@@ -298,15 +298,5 @@ describe('messageRepository thread records', () => {
 
   it('falls back to the current id for a thread never captured before', async () => {
     expect(await messageRepository.resolveCanonicalThreadId([THREAD_ID])).toBe(THREAD_ID);
-  });
-
-  it('lists the keys a re-scan already holds', async () => {
-    await messageRepository.upsertMessages([createMessage(1), createMessage(2)]);
-
-    const keys = await messageRepository.listThreadIdentityKeys(THREAD_ID);
-
-    expect(new Set(keys)).toEqual(
-      new Set(['msg:mid.$message1', 'msg:mid.$message2']),
-    );
   });
 });

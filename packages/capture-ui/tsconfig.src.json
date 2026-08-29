@@ -1,0 +1,10 @@
+{
+  "extends": "@extractor/tsconfig/browser.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    // Reached through capture-core's messaging barrel, and pnpm does not hoist
+    // @types to the root.
+    "types": ["chrome"]
+  },
+  "include": ["src"]
+}

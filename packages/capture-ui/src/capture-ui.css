@@ -1,0 +1,170 @@
+/*
+ * Shared popup chrome. Every class is prefixed cui- so that an app can style its
+ * own layout without colliding with these, and so that a rule here is obviously
+ * shared when it turns up in a stylesheet.
+ */
+
+.cui-surface {
+  color: #1c1e21;
+  background: #f0f2f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.cui-panel {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cui-panel__title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.cui-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.cui-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #65676b;
+}
+
+.cui-status__dot--capturing {
+  background: #31a24c;
+}
+
+.cui-status__dot--interrupted {
+  background: #f02849;
+}
+
+.cui-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.cui-metric {
+  padding: 10px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.cui-metric__label {
+  font-size: 11px;
+  color: #65676b;
+}
+
+.cui-metric__value {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.cui-modes,
+.cui-options {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #dadde1;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cui-modes__legend,
+.cui-options__legend {
+  padding: 0 4px;
+  font-size: 11px;
+  color: #65676b;
+}
+
+.cui-mode,
+.cui-options__row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.cui-options__row--field {
+  grid-template-columns: 1fr auto;
+}
+
+.cui-mode__label,
+.cui-options__label {
+  font-weight: 500;
+}
+
+.cui-mode__hint,
+.cui-options__hint {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: #65676b;
+}
+
+.cui-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cui-message {
+  margin: 0;
+  font-size: 12px;
+  color: #65676b;
+}
+
+.cui-message--warning {
+  color: #b26a00;
+}
+
+.cui-message--error {
+  color: #c9184a;
+}
+
+.cui-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cui-button {
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cui-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cui-button--primary {
+  background: #1877f2;
+  color: #fff;
+}
+
+.cui-button--secondary {
+  background: #fff;
+  border-color: #dadde1;
+  color: #1c1e21;
+}
+
+.cui-button--danger {
+  background: #fff;
+  border-color: #f02849;
+  color: #c9184a;
+}

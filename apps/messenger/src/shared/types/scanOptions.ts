@@ -8,9 +8,6 @@ export type ScanOptions = {
   // makes "add the last month to an already-scanned thread" a bounded job.
   stopAtDate: string | null;
   stopAtMessageLimit: number | null;
-  // A second pass back down the thread. It should insert nothing, so the count
-  // it inserts is a free idempotence check rather than a capture mechanism.
-  runReturnPass: boolean;
 };
 
 export const DEFAULT_SCAN_OPTIONS: ScanOptions = {
@@ -18,5 +15,4 @@ export const DEFAULT_SCAN_OPTIONS: ScanOptions = {
   captureAttachments: true,
   stopAtDate: null,
   stopAtMessageLimit: null,
-  runReturnPass: false,
 };

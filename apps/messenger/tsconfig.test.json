@@ -1,7 +1,8 @@
 {
   "extends": "@extractor/tsconfig/browser.json",
   "compilerOptions": {
-    "types": ["chrome", "node", "vitest/globals"]
+    "jsx": "react-jsx",
+    "types": ["chrome", "vite/client", "node", "vitest/globals"]
   },
-  "include": ["src/**/*.test.ts"]
+  "include": ["src/**/*.test.ts", "tests/**/*.ts"]
 }

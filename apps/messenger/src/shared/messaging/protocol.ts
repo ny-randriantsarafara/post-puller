@@ -61,14 +61,12 @@ export const scanOptionsSchema = z
     captureAttachments: z.boolean().default(true),
     stopAtDate: z.string().nullable().default(null),
     stopAtMessageLimit: z.number().nullable().default(null),
-    runReturnPass: z.boolean().default(false),
   })
   .default({
     captureReactions: true,
     captureAttachments: true,
     stopAtDate: null,
     stopAtMessageLimit: null,
-    runReturnPass: false,
   });
 
 export const capturedThreadSchema = z.object({

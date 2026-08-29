@@ -1,14 +1,28 @@
-import type { ThreadIdSource } from '../../content/threadPage';
+// The id in the URL is stable across surfaces but not within one: the same
+// conversation is reachable under a numeric id and under a vanity handle. The
+// numeric form is the stronger of the two.
+export type ThreadIdSource = 'threadTitle' | 'vanity' | 'numeric';
 
-// Why a scan stopped, kept apart from whether it succeeded. Only the first two
-// mean the thread was read all the way back to its first message.
+const NUMERIC_THREAD_ID = /^\d{5,}$/;
+
+export function resolveThreadIdSource(threadId: string): ThreadIdSource {
+  if (NUMERIC_THREAD_ID.test(threadId)) {
+    return 'numeric';
+  }
+
+  return 'vanity';
+}
+
+// Why a scan stopped, kept apart from whether it succeeded. Only the first one
+// means the thread was read all the way back to its first message.
 export const SCAN_STOP_REASONS = [
-  'threadStartMarker',
   'reachedStart',
   // Not at the top, yet nothing new loads. Reported as its own state because it
   // is actionable by the user, and reporting it as success would be a lie.
   'blocked',
-  'stepCap',
+  // The hard wall-clock bound on one scan. It exists because a scan drives the
+  // user's own logged-in session, and automation that runs unbounded on it is
+  // the risk this extension takes on their behalf.
   'timeCap',
   'userLimit',
   'interrupted',
@@ -16,13 +30,8 @@ export const SCAN_STOP_REASONS = [
 
 export type ScanStopReason = (typeof SCAN_STOP_REASONS)[number];
 
-const COMPLETE_STOP_REASONS: readonly ScanStopReason[] = [
-  'threadStartMarker',
-  'reachedStart',
-];
-
 export function reachedThreadStart(stopReason: ScanStopReason): boolean {
-  return COMPLETE_STOP_REASONS.includes(stopReason);
+  return stopReason === 'reachedStart';
 }
 
 // The per-thread record that lives beside the messages. It is what lets a
