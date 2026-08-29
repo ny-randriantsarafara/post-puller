@@ -1,11 +1,21 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
+import { z } from 'zod';
 import {
   parseBackgroundResponse,
   type BackgroundResponse,
 } from '../../src/shared/messaging/protocol';
 import { sumCollectionStats } from '../../src/shared/stats/collectionStats';
+
+// Only what this test reads back out of an exported file, parsed rather than
+// asserted so a file whose shape changed fails here instead of being read as if
+// it had not.
+const exportedFileSchema = z.object({
+  collection: z.object({ name: z.string().nullable(), url: z.string() }),
+  stats: z.object({ postCount: z.number() }),
+  posts: z.array(z.object({ text: z.string().nullable() })),
+});
 
 const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'group-page.html');
@@ -179,6 +189,30 @@ test('captures visible posts, deduplicates, persists, and exports JSON', async (
     /\/groups\/sample-group\/posts\/1001\/?$/,
   );
 
-  const exportPayload = await preview.evaluate(() => document.body.innerText);
-  expect(exportPayload).toContain('Export JSON');
+  // The file is written a page at a time into a blob rather than serialised as one
+  // string, so it is downloaded and parsed here: a header that no longer joins up
+  // with the posts appended after it would still look right in any unit test of
+  // its pieces.
+  const [download] = await Promise.all([
+    preview.waitForEvent('download'),
+    preview.getByRole('button', { name: 'Export JSON' }).click(),
+  ]);
+
+  expect(download.suggestedFilename()).toMatch(/^sample-group_.*\.json$/);
+
+  const downloadPath = await download.path();
+  const exportedFile = exportedFileSchema.parse(
+    JSON.parse(readFileSync(downloadPath, 'utf8')),
+  );
+
+  expect(exportedFile.collection).toEqual({
+    name: 'Sample Group',
+    url: collectionUrl,
+  });
+  expect(exportedFile.stats.postCount).toBe(3);
+  expect(exportedFile.posts.map((post) => post.text)).toEqual([
+    'Post loaded after manual scroll',
+    'Second captured post',
+    'First captured post with expanded text',
+  ]);
 });

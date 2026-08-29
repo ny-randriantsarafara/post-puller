@@ -110,19 +110,24 @@ yet. **Start capture** injects it into the active tab when needed, so there is n
 refresh the group tab first. If the tab still cannot be reached, the popup says so instead
 of failing silently.
 
-## JSON export schema (v3)
+## JSON export schema (v4)
 
 Export writes **one JSON file per captured group**. The file name uses the group slug and
 the publication window of the posts inside it, for example
 `sample-group_2026-08-05_2026-08-19.json`. When no post has a parsed publication date, the
 export day is used instead: `sample-group_export-2026-08-19.json`.
 
+Each group is read a page at a time and each page is appended to its file, so a large group
+costs one page of memory rather than every post plus the file built from them. The fields
+below are shown indented for reading; the file itself is written with one post per line,
+which keeps it greppable without spending a fifth of its bytes on indentation.
+
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "extensionVersion": "0.1.0",
   "exportedAt": "2026-08-19T12:00:00.000Z",
-  "group": { "name": "Sample Group", "url": "https://www.facebook.com/groups/sample-group" },
+  "collection": { "name": "Sample Group", "url": "https://www.facebook.com/groups/sample-group" },
   "publicationWindow": {
     "earliest": "2026-08-05T08:00:00.000Z",
     "latest": "2026-08-19T11:00:00.000Z"

@@ -23,6 +23,73 @@ export function requestValue<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 
+// Walks an index with a cursor rather than reading a store and slicing it.
+// advance() skips to the offset without deserialising what it passes, which is
+// what makes paging a store of 100 000 records affordable; reading it all to
+// return twenty rows is not.
+export function collectIndexPage(
+  index: IDBIndex,
+  range: IDBKeyRange | null,
+  offset: number,
+  limit: number,
+  direction: IDBCursorDirection = 'next',
+): Promise<unknown[]> {
+  return new Promise((resolve, reject) => {
+    const values: unknown[] = [];
+    const request = index.openCursor(range, direction);
+    let hasSkipped = offset === 0;
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor === null || values.length >= limit) {
+        resolve(values);
+        return;
+      }
+
+      if (!hasSkipped) {
+        hasSkipped = true;
+        cursor.advance(offset);
+        return;
+      }
+
+      values.push(cursor.value);
+      if (values.length >= limit) {
+        resolve(values);
+        return;
+      }
+
+      cursor.continue();
+    };
+
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to read a page from an index'));
+    };
+  });
+}
+
+// Deletes through a cursor for the same reason: the keys of one collection are
+// found by walking its own range instead of reading every record in the store.
+export function deleteIndexRange(index: IDBIndex, range: IDBKeyRange): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = index.openCursor(range);
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor === null) {
+        resolve();
+        return;
+      }
+
+      cursor.delete();
+      cursor.continue();
+    };
+
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to delete a range from an index'));
+    };
+  });
+}
+
 function resolveUpgradedStore(
   request: IDBOpenDBRequest,
   storeConfig: ObjectStoreConfig,

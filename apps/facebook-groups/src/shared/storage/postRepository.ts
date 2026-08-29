@@ -1,5 +1,13 @@
-import { createItemRepository } from '@extractor/capture-core/storage';
-import { facebookGroupsDomain } from '../domain';
+import type { CollectionStatsDelta } from '@extractor/capture-core/stats';
+import {
+  createItemRepository,
+  type ItemPageOrder,
+} from '@extractor/capture-core/storage';
+import {
+  CAPTURED_AT_INDEX,
+  COLLECTION_CAPTURED_AT_INDEX,
+  facebookGroupsDomain,
+} from '../domain';
 import type { CollectionCaptureStats } from '../stats/collectionStats';
 import type { CapturedPost } from '../types';
 
@@ -16,16 +24,19 @@ export type PostPage = {
 
 export const isBetterParse = repository.isBetterParse;
 
-export function upsertPosts(posts: CapturedPost[]): Promise<number> {
+// Newest capture first, which is the order the preview reads in.
+const NEWEST_FIRST: ItemPageOrder = {
+  index: CAPTURED_AT_INDEX,
+  collectionIndex: COLLECTION_CAPTURED_AT_INDEX,
+  direction: 'prev',
+};
+
+export function upsertPosts(posts: CapturedPost[]): Promise<CollectionStatsDelta[]> {
   return repository.upsertItems(posts);
 }
 
 export function countPosts(): Promise<number> {
   return repository.countItems();
-}
-
-export function countIncompletePosts(): Promise<number> {
-  return repository.countIncompleteItems();
 }
 
 export function listAllPosts(): Promise<CapturedPost[]> {
@@ -41,7 +52,12 @@ export async function listPostsPage(
   limit: number,
   collectionUrl: string | null = null,
 ): Promise<PostPage> {
-  const page = await repository.listItemsPage(offset, limit, collectionUrl);
+  const page = await repository.listItemsPage(
+    NEWEST_FIRST,
+    offset,
+    limit,
+    collectionUrl,
+  );
 
   return {
     posts: page.items,

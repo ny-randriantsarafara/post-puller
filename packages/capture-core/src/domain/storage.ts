@@ -17,6 +17,10 @@ export type StorageConfig = {
   readonly databaseName: string;
   readonly version: number;
   readonly itemStoreName: string;
+  // The index over a record's collection url. Removing one collection's records
+  // without it means reading and deserialising every record in the store, which
+  // is a full scan to answer a question about one conversation or one group.
+  readonly collectionIndexName: string;
   // Every store a write may touch, not just the item store. A domain that keeps
   // a summary alongside its items has to update both in one transaction, or a
   // service worker dying mid-batch leaves the summary disagreeing with reality.

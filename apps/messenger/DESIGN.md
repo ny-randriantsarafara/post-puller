@@ -195,6 +195,25 @@ The visible `date_break` separators use abbreviated forms (`Tue 20:06`, `15 Jul 
 17:38`) while the accessible names use full ones (`Tuesday`, `July`). The parser reads
 the accessible names.
 
+### Counts are kept by the write, not recovered by reading
+
+A batch lands about once a second and the popup polls between them. Answering either by
+building the counts from the store means reading and validating every stored record, so a
+long conversation is scanned once per batch and twice a second on top of that: the cost of
+knowing how much is stored grows with how much is stored.
+
+The write is the only place that holds both the record that was there and the record that
+replaced it, which is what a count actually needs — a re-sighting adds no message but can
+turn an incomplete one complete. So `upsertItems` returns that difference per conversation
+and the session's totals are moved by it. A full count happens where the user is already
+waiting: starting a scan, clearing data.
+
+Kept rather than derived, totals can fall behind whatever writes without going through a
+scan. `GET_SESSION` therefore compares them against a *count of the keys* in the store,
+which does not deserialise the records under them, and recounts properly only when the two
+disagree. It writes the session only when something changed, so a popup left open is no
+longer a write to `chrome.storage.local` twice a second.
+
 ## Still open
 
 Not contradicted by the samples, but not confirmed by them either:

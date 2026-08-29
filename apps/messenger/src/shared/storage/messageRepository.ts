@@ -1,4 +1,8 @@
-import { createItemRepository, requestValue } from '@extractor/capture-core/storage';
+import {
+  collectIndexPage,
+  createItemRepository,
+  requestValue,
+} from '@extractor/capture-core/storage';
 import {
   ALIAS_INDEX,
   MESSAGE_STORE_NAME,
@@ -63,48 +67,6 @@ function unresolvedRange(threadId: string): IDBKeyRange {
   );
 }
 
-// Walks an index with a cursor rather than reading the store and slicing it.
-// advance() skips to the offset without deserialising what it passes, which is
-// what makes paging a thread of 100 000 messages affordable.
-function collectPage(
-  index: IDBIndex,
-  range: IDBKeyRange,
-  offset: number,
-  limit: number,
-): Promise<unknown[]> {
-  return new Promise((resolve, reject) => {
-    const values: unknown[] = [];
-    const request = index.openCursor(range);
-    let hasSkipped = offset === 0;
-
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (cursor === null) {
-        resolve(values);
-        return;
-      }
-
-      if (!hasSkipped) {
-        hasSkipped = true;
-        cursor.advance(offset);
-        return;
-      }
-
-      values.push(cursor.value);
-      if (values.length >= limit) {
-        resolve(values);
-        return;
-      }
-
-      cursor.continue();
-    };
-
-    request.onerror = () => {
-      reject(request.error ?? new Error('Failed to read a message page'));
-    };
-  });
-}
-
 function parseMessages(values: unknown[]): CapturedMessage[] {
   return values.flatMap((value) => {
     const parsed = messengerDomain.itemSchema.safeParse(value);
@@ -167,7 +129,12 @@ export const messageRepository = {
     return repository.read([MESSAGE_STORE_NAME], async (stores) => {
       const index = stores.get(MESSAGE_STORE_NAME).index(THREAD_SORT_INDEX);
       const total = await requestValue(index.count(threadRange(threadId)));
-      const values = await collectPage(index, threadRange(threadId), offset, limit);
+      const values = await collectIndexPage(
+        index,
+        threadRange(threadId),
+        offset,
+        limit,
+      );
 
       return { messages: parseMessages(values), total, offset, limit };
     });

@@ -2,7 +2,6 @@ import type { CollectionCaptureStats } from '@extractor/capture-core/messaging';
 import {
   buildCollectionStats as buildCollectionStatsFor,
   buildPublicationWindow as buildPublicationWindowFor,
-  groupItemsByCollectionUrl,
 } from '@extractor/capture-core/stats';
 import type { PublicationWindow } from '@extractor/capture-core/messaging';
 import { POST_STATS_PROJECTION } from '../domain';
@@ -18,12 +17,6 @@ export {
   formatPublicationWindow,
   sumCollectionStats,
 } from '@extractor/capture-core/stats';
-
-export function groupPostsByCollectionUrl(
-  posts: CapturedPost[],
-): Map<string, CapturedPost[]> {
-  return groupItemsByCollectionUrl(posts);
-}
 
 export function buildPublicationWindow(posts: CapturedPost[]): PublicationWindow {
   return buildPublicationWindowFor(posts, POST_STATS_PROJECTION);

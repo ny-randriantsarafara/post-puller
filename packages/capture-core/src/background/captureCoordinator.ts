@@ -2,6 +2,10 @@ import type { CaptureDomain } from '../domain/captureDomain';
 import type { CapturedItemBase } from '../domain/item';
 import { addScanStats, type ScanStats } from '../domain/stats';
 import { toErrorMessage } from '../errorMessage';
+import {
+  applyCollectionStatsDeltas,
+  sumCollectionStats,
+} from '../stats/collectionStats';
 import { trySendTabRequest } from '../messaging/client';
 import type {
   BackgroundRequest,
@@ -57,7 +61,10 @@ export function createCaptureCoordinator<
   sessionStore,
   copy,
 }: CaptureCoordinatorConfig<TItem, TOptions>): CaptureCoordinator<TOptions> {
-  async function refreshSessionCounts(
+  // Reads and validates every stored record, so it runs where the user is already
+  // waiting for something: starting a scan, clearing data. During a scan the
+  // totals move by the deltas the write reported instead.
+  async function recountSessionStats(
     session: CaptureSession<TOptions>,
   ): Promise<CaptureSession<TOptions>> {
     const collectionStats = await repository.listCollectionStats();
@@ -66,6 +73,21 @@ export function createCaptureCoordinator<
       ...session,
       collectionStats,
     };
+  }
+
+  // Counting keys in an index does not deserialise the records under them, which
+  // is what makes this affordable on every poll. It catches the totals having
+  // been left behind by something that wrote the store without going through a
+  // scan, and it is the only thing that reads the store on this path.
+  async function reconcileSessionStats(
+    session: CaptureSession<TOptions>,
+  ): Promise<CaptureSession<TOptions> | null> {
+    const storedItemCount = await repository.countItems();
+    if (storedItemCount === sumCollectionStats(session.collectionStats).itemCount) {
+      return null;
+    }
+
+    return recountSessionStats(session);
   }
 
   function readContentScriptFiles(): string[] {
@@ -175,7 +197,7 @@ export function createCaptureCoordinator<
       return { type: 'ERROR', message: copy.notOnTargetPage };
     }
 
-    const session = await refreshSessionCounts({
+    const session = await recountSessionStats({
       ...sessionStore.emptySession,
       status: 'capturing',
       mode,
@@ -192,7 +214,7 @@ export function createCaptureCoordinator<
 
     const beginCapture = await sendBeginCapture(tabId, mode, options);
     if (!beginCapture.ok) {
-      await sessionStore.write(await refreshSessionCounts(sessionStore.emptySession));
+      await sessionStore.write(await recountSessionStats(sessionStore.emptySession));
       return { type: 'ERROR', message: beginCapture.error };
     }
 
@@ -206,7 +228,7 @@ export function createCaptureCoordinator<
       await sendEndCapture(currentSession.tabId);
     }
 
-    const session = await refreshSessionCounts({
+    const session = await recountSessionStats({
       ...currentSession,
       status: 'idle',
       stoppedAt: new Date().toISOString(),
@@ -233,12 +255,15 @@ export function createCaptureCoordinator<
       return { type: 'SESSION', session };
     }
 
-    await repository.upsertItems(items);
+    const deltas = await repository.upsertItems(items);
 
-    const refreshedSession = await refreshSessionCounts(session);
-    await sessionStore.write(refreshedSession);
+    const countedSession: CaptureSession<TOptions> = {
+      ...session,
+      collectionStats: applyCollectionStatsDeltas(session.collectionStats, deltas),
+    };
+    await sessionStore.write(countedSession);
 
-    return { type: 'SUCCESS', session: refreshedSession };
+    return { type: 'SUCCESS', session: countedSession };
   }
 
   // Accumulated rather than recounted, because the pages a batch skipped are
@@ -280,10 +305,12 @@ export function createCaptureCoordinator<
       return session;
     }
 
-    const completedSession = await refreshSessionCounts({
+    // Scrolling running out says nothing about what is stored, so the totals are
+    // left where the batches put them.
+    const completedSession: CaptureSession<TOptions> = {
       ...session,
       autoScrollCompletedAt: new Date().toISOString(),
-    });
+    };
 
     await sessionStore.write(completedSession);
 
@@ -296,12 +323,12 @@ export function createCaptureCoordinator<
       return;
     }
 
-    const interruptedSession = await refreshSessionCounts({
+    const interruptedSession: CaptureSession<TOptions> = {
       ...session,
       status: 'interrupted',
       interruptedAt: new Date().toISOString(),
       tabId: null,
-    });
+    };
 
     await sessionStore.write(interruptedSession);
   }
@@ -309,7 +336,7 @@ export function createCaptureCoordinator<
   async function handleClearData(): Promise<BackgroundResponse<TOptions>> {
     await repository.clearItems();
 
-    const session = await refreshSessionCounts({ ...sessionStore.emptySession });
+    const session = await recountSessionStats({ ...sessionStore.emptySession });
     await sessionStore.write(session);
 
     return { type: 'SUCCESS', session };
@@ -321,7 +348,7 @@ export function createCaptureCoordinator<
     await repository.clearCollectionItems(collectionUrl);
 
     const currentSession = await sessionStore.read();
-    const session = await refreshSessionCounts(currentSession);
+    const session = await recountSessionStats(currentSession);
 
     await sessionStore.write(session);
 
@@ -352,10 +379,17 @@ export function createCaptureCoordinator<
     sender: chrome.runtime.MessageSender,
   ): Promise<BackgroundResponse<TOptions>> {
     switch (parsedRequest.type) {
+      // Polled by an open popup, so it neither reads the records nor writes the
+      // session unless the totals have actually fallen behind the store.
       case 'GET_SESSION': {
-        const session = await refreshSessionCounts(await sessionStore.read());
-        await sessionStore.write(session);
-        return { type: 'SESSION', session };
+        const session = await sessionStore.read();
+        const reconciledSession = await reconcileSessionStats(session);
+        if (reconciledSession === null) {
+          return { type: 'SESSION', session };
+        }
+
+        await sessionStore.write(reconciledSession);
+        return { type: 'SESSION', session: reconciledSession };
       }
       case 'START_CAPTURE':
         return handleStartCapture(

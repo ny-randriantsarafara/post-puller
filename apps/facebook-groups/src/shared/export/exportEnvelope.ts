@@ -1,10 +1,6 @@
 import type { CollectionInfo } from '@extractor/capture-core/domain';
 import type { CapturedPost } from '../types';
-import {
-  buildPublicationWindow,
-  groupPostsByCollectionUrl,
-  type PublicationWindow,
-} from '../stats/collectionStats';
+import type { PublicationWindow } from '../stats/collectionStats';
 
 export const EXPORT_SCHEMA_VERSION = 4;
 
@@ -24,9 +20,24 @@ export type ExportEnvelope = {
   posts: CapturedPost[];
 };
 
-export type CollectionExportFile = {
-  fileName: string;
-  envelope: ExportEnvelope;
+// Everything a file says about itself, which is everything but the posts. Held
+// apart from them so a group can be written a page at a time.
+export type CollectionExportHeader = Omit<ExportEnvelope, 'posts'>;
+
+// What the header needs from the posts, carried across pages so no page has to
+// be kept.
+export type CollectionExportSummary = {
+  readonly postCount: number;
+  readonly commentCount: number;
+  readonly incompletePostCount: number;
+  readonly publicationWindow: PublicationWindow;
+};
+
+export const EMPTY_COLLECTION_EXPORT_SUMMARY: CollectionExportSummary = {
+  postCount: 0,
+  commentCount: 0,
+  incompletePostCount: 0,
+  publicationWindow: { earliest: null, latest: null },
 };
 
 function slugifyCollectionName(collection: CollectionInfo): string {
@@ -49,7 +60,7 @@ function formatDateForFileName(isoDate: string): string {
   return isoDate.slice(0, 10);
 }
 
-function buildCollectionExportFileName(
+export function buildCollectionExportFileName(
   collection: CollectionInfo,
   publicationWindow: PublicationWindow,
   exportedAt: string,
@@ -69,92 +80,87 @@ function buildCollectionExportFileName(
   return `${slug}_export-${exportDay}.json`;
 }
 
-function buildStats(posts: CapturedPost[]): ExportEnvelope['stats'] {
-  const commentCount = posts.reduce(
-    (total, post) => total + post.comments.length,
-    0,
-  );
-  const incompletePostCount = posts.filter((post) => post.warnings.length > 0).length;
+function widenPublicationWindow(
+  window: PublicationWindow,
+  publishedAt: string | null,
+): PublicationWindow {
+  if (publishedAt === null) {
+    return window;
+  }
 
   return {
-    postCount: posts.length,
-    commentCount,
-    incompletePostCount,
+    earliest:
+      window.earliest === null || publishedAt < window.earliest
+        ? publishedAt
+        : window.earliest,
+    latest:
+      window.latest === null || publishedAt > window.latest
+        ? publishedAt
+        : window.latest,
   };
 }
 
+function addPostToSummary(
+  summary: CollectionExportSummary,
+  post: CapturedPost,
+): CollectionExportSummary {
+  return {
+    postCount: summary.postCount + 1,
+    commentCount: summary.commentCount + post.comments.length,
+    incompletePostCount: summary.incompletePostCount + Number(post.warnings.length > 0),
+    publicationWindow: widenPublicationWindow(
+      summary.publicationWindow,
+      post.publishedAt,
+    ),
+  };
+}
+
+// Folded page by page while a file is written, so a group of any size costs one
+// page of memory rather than all of it.
+export function addPostsToCollectionExportSummary(
+  summary: CollectionExportSummary,
+  posts: readonly CapturedPost[],
+): CollectionExportSummary {
+  return posts.reduce(addPostToSummary, summary);
+}
+
+export function buildCollectionExportHeader(
+  collection: CollectionInfo,
+  summary: CollectionExportSummary,
+  extensionVersion: string,
+  exportedAt: string,
+): CollectionExportHeader {
+  return {
+    schemaVersion: EXPORT_SCHEMA_VERSION,
+    extensionVersion,
+    exportedAt,
+    collection,
+    publicationWindow: summary.publicationWindow,
+    stats: {
+      postCount: summary.postCount,
+      commentCount: summary.commentCount,
+      incompletePostCount: summary.incompletePostCount,
+    },
+  };
+}
+
+// The whole envelope in memory, for a caller that already holds every post. It
+// shares the fold above, so the two cannot describe the same group differently.
 export function buildCollectionExportEnvelope(
   posts: CapturedPost[],
   collection: CollectionInfo,
   extensionVersion: string,
   exportedAt: string,
 ): ExportEnvelope {
-  const publicationWindow = buildPublicationWindow(posts);
+  const summary = addPostsToCollectionExportSummary(
+    EMPTY_COLLECTION_EXPORT_SUMMARY,
+    posts,
+  );
 
   return {
-    schemaVersion: EXPORT_SCHEMA_VERSION,
-    extensionVersion,
-    exportedAt,
-    collection,
-    publicationWindow,
-    stats: buildStats(posts),
+    ...buildCollectionExportHeader(collection, summary, extensionVersion, exportedAt),
     posts,
   };
 }
 
-export function buildCollectionExports(
-  posts: CapturedPost[],
-  extensionVersion: string,
-  exportedAt: string,
-): CollectionExportFile[] {
-  const postsByCollectionUrl = groupPostsByCollectionUrl(posts);
 
-  return [...postsByCollectionUrl.entries()].map(([collectionUrl, collectionPosts]) => {
-    const collection = collectionPosts[0]?.collection ?? { name: null, url: collectionUrl };
-    const envelope = buildCollectionExportEnvelope(
-      collectionPosts,
-      collection,
-      extensionVersion,
-      exportedAt,
-    );
-
-    return {
-      fileName: buildCollectionExportFileName(
-        collection,
-        envelope.publicationWindow,
-        exportedAt,
-      ),
-      envelope,
-    };
-  });
-}
-
-export function serializeExportEnvelope(envelope: ExportEnvelope): string {
-  return `${JSON.stringify(envelope, null, 2)}\n`;
-}
-
-export function downloadExportEnvelope(
-  envelope: ExportEnvelope,
-  fileName: string,
-): void {
-  const serialized = serializeExportEnvelope(envelope);
-  const blob = new Blob([serialized], { type: 'application/json' });
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(objectUrl);
-}
-
-export function downloadCollectionExports(
-  posts: CapturedPost[],
-  extensionVersion: string,
-  exportedAt: string,
-): void {
-  const exports = buildCollectionExports(posts, extensionVersion, exportedAt);
-
-  for (const collectionExport of exports) {
-    downloadExportEnvelope(collectionExport.envelope, collectionExport.fileName);
-  }
-}

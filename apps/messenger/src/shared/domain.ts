@@ -18,6 +18,7 @@ export const THREAD_STORE_NAME = 'capturedThreads';
 
 export const THREAD_SORT_INDEX = 'by_thread_sort';
 export const THREAD_INDEX = 'by_thread';
+export const COLLECTION_INDEX = 'by_collection';
 export const ALIAS_INDEX = 'by_alias';
 
 export const MESSAGE_STATS_PROJECTION: StatsProjection<CapturedMessage> = {
@@ -35,8 +36,11 @@ export const messengerDomain: CaptureDomain<CapturedMessage, ScanOptions> = {
   defaultOptions: DEFAULT_SCAN_OPTIONS,
   storage: {
     databaseName: 'messengerCapture',
-    version: 1,
+    // Raised for by_collection, which the generic layer needs to remove one
+    // conversation's messages without reading the store.
+    version: 2,
     itemStoreName: MESSAGE_STORE_NAME,
+    collectionIndexName: COLLECTION_INDEX,
     stores: [
       {
         name: MESSAGE_STORE_NAME,
@@ -46,6 +50,7 @@ export const messengerDomain: CaptureDomain<CapturedMessage, ScanOptions> = {
           // Paging a thread in date order without deserialising the records
           // that are skipped, which a thread of 100 000 messages needs.
           { name: THREAD_SORT_INDEX, keyPath: ['threadId', 'sortKey'] },
+          { name: COLLECTION_INDEX, keyPath: 'collection.url' },
           { name: 'by_fingerprint', keyPath: 'fingerprint' },
         ],
       },

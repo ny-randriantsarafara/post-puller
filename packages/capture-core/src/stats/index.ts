@@ -1,6 +1,8 @@
-export type { CollectionStatsTotals } from './collectionStats';
+export type { CollectionStatsDelta, CollectionStatsTotals } from './collectionStats';
 export {
+  applyCollectionStatsDeltas,
   buildCollectionStats,
+  buildCollectionStatsDelta,
   buildPublicationWindow,
   findCollectionStats,
   formatPublicationWindow,

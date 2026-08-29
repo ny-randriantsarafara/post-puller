@@ -1,3 +1,4 @@
+import type { CollectionStatsDelta } from '@extractor/capture-core/stats';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CapturedMessage } from '../types/capturedMessage';
 import { buildSortKey } from '../types/capturedMessage';
@@ -39,6 +40,10 @@ function createMessage(
   };
 }
 
+function sumItemCount(deltas: CollectionStatsDelta[]): number {
+  return deltas.reduce((total, delta) => total + delta.itemCount, 0);
+}
+
 function createUnresolvedMessage(index: number): CapturedMessage {
   const capturedAt = new Date(Date.UTC(2026, 7, 29, 9, index)).toISOString();
 
@@ -60,13 +65,13 @@ beforeEach(async () => {
 
 describe('messageRepository', () => {
   it('stores a batch of messages', async () => {
-    const inserted = await messageRepository.upsertMessages([
+    const deltas = await messageRepository.upsertMessages([
       createMessage(1),
       createMessage(2),
       createMessage(3),
     ]);
 
-    expect(inserted).toBe(3);
+    expect(sumItemCount(deltas)).toBe(3);
     expect(await messageRepository.countMessages()).toBe(3);
   });
 
@@ -76,9 +81,9 @@ describe('messageRepository', () => {
     const batch = [createMessage(1), createMessage(2), createMessage(3)];
     await messageRepository.upsertMessages(batch);
 
-    const reinserted = await messageRepository.upsertMessages(batch);
+    const deltas = await messageRepository.upsertMessages(batch);
 
-    expect(reinserted).toBe(0);
+    expect(sumItemCount(deltas)).toBe(0);
     expect(await messageRepository.countMessages()).toBe(3);
   });
 

@@ -44,21 +44,38 @@ export type ThreadExportEnvelope = {
   messages: CapturedMessage[];
 };
 
-export type ThreadExportFile = {
-  fileName: string;
-  envelope: ThreadExportEnvelope;
+// Everything an export says about itself, which is everything but the messages.
+// Held apart from them so a file can be written a page at a time.
+export type ThreadExportHeader = Omit<ThreadExportEnvelope, 'messages'>;
+
+// What the header needs from the messages, carried across pages so no page has
+// to be kept. Two flags rather than the warning list, because the list is built
+// in a fixed order once the whole thread has been read.
+export type ThreadExportSummary = {
+  readonly messageCount: number;
+  readonly incompleteMessageCount: number;
+  readonly unresolvedTimestampCount: number;
+  readonly reactionCount: number;
+  readonly attachmentCount: number;
+  readonly conversationWindow: ThreadExportEnvelope['conversationWindow'];
+  readonly hasInferredTimestamps: boolean;
+  readonly hasUnstableIdentities: boolean;
 };
 
-function hasWarning(
-  messages: readonly CapturedMessage[],
-  warning: CapturedMessage['warnings'][number],
-): boolean {
-  return messages.some((message) => message.warnings.includes(warning));
-}
+export const EMPTY_THREAD_EXPORT_SUMMARY: ThreadExportSummary = {
+  messageCount: 0,
+  incompleteMessageCount: 0,
+  unresolvedTimestampCount: 0,
+  reactionCount: 0,
+  attachmentCount: 0,
+  conversationWindow: { earliest: null, latest: null },
+  hasInferredTimestamps: false,
+  hasUnstableIdentities: false,
+};
 
 function buildWarnings(
   thread: CapturedThread,
-  messages: readonly CapturedMessage[],
+  summary: ThreadExportSummary,
 ): ExportWarning[] {
   const warnings: ExportWarning[] = [];
 
@@ -70,44 +87,95 @@ function buildWarnings(
     warnings.push('ENCRYPTED_THREAD');
   }
 
-  if (messages.some((message) => message.sentAt === null)) {
+  if (summary.unresolvedTimestampCount > 0) {
     warnings.push('UNRESOLVED_TIMESTAMPS');
   }
 
-  if (hasWarning(messages, 'INFERRED_TIMESTAMP')) {
+  if (summary.hasInferredTimestamps) {
     warnings.push('INFERRED_TIMESTAMPS');
   }
 
-  if (hasWarning(messages, 'UNSTABLE_IDENTITY')) {
+  if (summary.hasUnstableIdentities) {
     warnings.push('UNSTABLE_IDENTITIES');
   }
 
   return warnings;
 }
 
-function countAttachments(messages: readonly CapturedMessage[]): number {
-  return messages.reduce(
-    (total, message) =>
-      total +
-      message.attachments.filter((attachment) => attachment.kind !== 'none').length,
-    0,
-  );
+function countAttachments(message: CapturedMessage): number {
+  return message.attachments.filter((attachment) => attachment.kind !== 'none').length;
 }
 
 // Only resolved dates bound the conversation. An unresolved message sorts to the
 // end of the thread, and letting it stand in for the newest message would report
 // a window the conversation never had.
-function buildConversationWindow(
-  messages: readonly CapturedMessage[],
+function widenConversationWindow(
+  window: ThreadExportEnvelope['conversationWindow'],
+  sentAt: string | null,
 ): ThreadExportEnvelope['conversationWindow'] {
-  const sentInstants = messages
-    .map((message) => message.sentAt)
-    .filter((sentAt): sentAt is string => sentAt !== null)
-    .sort((left, right) => left.localeCompare(right));
+  if (sentAt === null) {
+    return window;
+  }
 
   return {
-    earliest: sentInstants.at(0) ?? null,
-    latest: sentInstants.at(-1) ?? null,
+    earliest:
+      window.earliest === null || sentAt < window.earliest ? sentAt : window.earliest,
+    latest: window.latest === null || sentAt > window.latest ? sentAt : window.latest,
+  };
+}
+
+function addMessageToSummary(
+  summary: ThreadExportSummary,
+  message: CapturedMessage,
+): ThreadExportSummary {
+  return {
+    messageCount: summary.messageCount + 1,
+    incompleteMessageCount:
+      summary.incompleteMessageCount + Number(message.warnings.length > 0),
+    unresolvedTimestampCount:
+      summary.unresolvedTimestampCount + Number(message.sentAt === null),
+    reactionCount: summary.reactionCount + message.reactions.length,
+    attachmentCount: summary.attachmentCount + countAttachments(message),
+    conversationWindow: widenConversationWindow(
+      summary.conversationWindow,
+      message.sentAt,
+    ),
+    hasInferredTimestamps:
+      summary.hasInferredTimestamps || message.warnings.includes('INFERRED_TIMESTAMP'),
+    hasUnstableIdentities:
+      summary.hasUnstableIdentities || message.warnings.includes('UNSTABLE_IDENTITY'),
+  };
+}
+
+// Folded page by page while the export is written, so a thread of any length
+// costs one page of memory rather than all of it.
+export function addMessagesToThreadExportSummary(
+  summary: ThreadExportSummary,
+  messages: readonly CapturedMessage[],
+): ThreadExportSummary {
+  return messages.reduce(addMessageToSummary, summary);
+}
+
+export function buildThreadExportHeader(
+  thread: CapturedThread,
+  summary: ThreadExportSummary,
+  extensionVersion: string,
+  exportedAt: string,
+): ThreadExportHeader {
+  return {
+    schemaVersion: EXPORT_SCHEMA_VERSION,
+    extensionVersion,
+    exportedAt,
+    thread,
+    conversationWindow: summary.conversationWindow,
+    stats: {
+      messageCount: summary.messageCount,
+      incompleteMessageCount: summary.incompleteMessageCount,
+      unresolvedTimestampCount: summary.unresolvedTimestampCount,
+      reactionCount: summary.reactionCount,
+      attachmentCount: summary.attachmentCount,
+    },
+    warnings: buildWarnings(thread, summary),
   };
 }
 
@@ -150,64 +218,38 @@ export function buildThreadExportFileName(
   return `${slug}_export-${exportedAt.slice(0, 10)}.json`;
 }
 
+// Codepoint order, which is the order the index the messages are paged from is
+// in. A locale comparison sorts '~' — the prefix of a sort key whose date never
+// resolved — before every digit, which puts the undated messages at the top of
+// the file instead of the end and disagrees with the file the paged writer
+// produces from the same thread.
+function compareSortKeys(left: CapturedMessage, right: CapturedMessage): number {
+  if (left.sortKey === right.sortKey) {
+    return 0;
+  }
+
+  return left.sortKey < right.sortKey ? -1 : 1;
+}
+
+// The whole envelope in memory, for a caller that already holds every message: a
+// test, or a thread short enough that a page-at-a-time export would be one page.
+// It shares the fold above, so the two cannot describe the same thread
+// differently.
 export function buildThreadExportEnvelope(
   thread: CapturedThread,
   messages: readonly CapturedMessage[],
   extensionVersion: string,
   exportedAt: string,
 ): ThreadExportEnvelope {
-  const orderedMessages = [...messages].sort((left, right) =>
-    left.sortKey.localeCompare(right.sortKey),
+  const orderedMessages = [...messages].sort(compareSortKeys);
+  const summary = addMessagesToThreadExportSummary(
+    EMPTY_THREAD_EXPORT_SUMMARY,
+    orderedMessages,
   );
 
   return {
-    schemaVersion: EXPORT_SCHEMA_VERSION,
-    extensionVersion,
-    exportedAt,
-    thread,
-    conversationWindow: buildConversationWindow(orderedMessages),
-    stats: {
-      messageCount: orderedMessages.length,
-      incompleteMessageCount: orderedMessages.filter(
-        (message) => message.warnings.length > 0,
-      ).length,
-      unresolvedTimestampCount: orderedMessages.filter(
-        (message) => message.sentAt === null,
-      ).length,
-      reactionCount: orderedMessages.reduce(
-        (total, message) => total + message.reactions.length,
-        0,
-      ),
-      attachmentCount: countAttachments(orderedMessages),
-    },
-    warnings: buildWarnings(thread, orderedMessages),
+    ...buildThreadExportHeader(thread, summary, extensionVersion, exportedAt),
     messages: orderedMessages,
   };
 }
 
-export function buildThreadExport(
-  thread: CapturedThread,
-  messages: readonly CapturedMessage[],
-  extensionVersion: string,
-  exportedAt: string,
-): ThreadExportFile {
-  const envelope = buildThreadExportEnvelope(
-    thread,
-    messages,
-    extensionVersion,
-    exportedAt,
-  );
-
-  return {
-    fileName: buildThreadExportFileName(
-      thread,
-      envelope.conversationWindow,
-      exportedAt,
-    ),
-    envelope,
-  };
-}
-
-export function serializeExportEnvelope(envelope: ThreadExportEnvelope): string {
-  return `${JSON.stringify(envelope, null, 2)}\n`;
-}

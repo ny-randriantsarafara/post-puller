@@ -5,7 +5,6 @@ import {
   buildPublicationWindow,
   findCollectionStats,
   formatPublicationWindow,
-  groupPostsByCollectionUrl,
   sumCollectionStats,
 } from './collectionStats';
 
@@ -57,20 +56,6 @@ function createSamplePost(
 }
 
 describe('collectionStats', () => {
-  it('groups posts by group url', () => {
-    const posts = [
-      createSamplePost('https://www.facebook.com/groups/a', 'Group A'),
-      createSamplePost('https://www.facebook.com/groups/b', 'Group B'),
-      createSamplePost('https://www.facebook.com/groups/a', 'Group A'),
-    ];
-
-    const groupedPosts = groupPostsByCollectionUrl(posts);
-
-    expect(groupedPosts.size).toBe(2);
-    expect(groupedPosts.get('https://www.facebook.com/groups/a')).toHaveLength(2);
-    expect(groupedPosts.get('https://www.facebook.com/groups/b')).toHaveLength(1);
-  });
-
   it('builds publication windows from parsed dates only', () => {
     const posts = [
       createSamplePost('https://www.facebook.com/groups/a', 'Group A', {

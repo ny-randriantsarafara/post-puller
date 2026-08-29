@@ -1,11 +1,13 @@
 export type { DatabaseHandle, TransactionStores } from './idb';
 export {
+  collectIndexPage,
   createDatabaseHandle,
+  deleteIndexRange,
   openDatabase,
   requestValue,
   runTransaction,
 } from './idb';
-export type { ItemPage, ItemRepository } from './itemRepository';
+export type { ItemPage, ItemPageOrder, ItemRepository } from './itemRepository';
 export {
   contradictsStoredIdentity,
   createItemRepository,

@@ -1,10 +1,17 @@
+import { buildJsonRecordBlob } from '@extractor/capture-core/export';
+import { readBlobText } from '@extractor/capture-core/testing/readBlobText';
 import { describe, expect, it } from 'vitest';
 import {
+  addPostsToCollectionExportSummary,
   buildCollectionExportEnvelope,
-  buildCollectionExports,
+  buildCollectionExportFileName,
+  buildCollectionExportHeader,
+  EMPTY_COLLECTION_EXPORT_SUMMARY,
   EXPORT_SCHEMA_VERSION,
 } from './exportEnvelope';
 import type { CapturedPost } from '../types';
+
+const EXPORTED_AT = '2026-08-19T12:00:00.000Z';
 
 const samplePost: CapturedPost = {
   identityKey: 'postId:1',
@@ -80,22 +87,29 @@ describe('buildCollectionExportEnvelope', () => {
   });
 });
 
-describe('buildCollectionExports', () => {
-  it('builds one file per group with a publication window file name', () => {
-    const exports = buildCollectionExports(
-      [samplePost, secondGroupPost],
-      '0.1.0',
-      '2026-08-19T12:00:00.000Z',
-    );
+// Named the way the download path names it: from the window the summary carried
+// out of the posts, not from the posts themselves.
+function exportFileName(posts: readonly CapturedPost[]): string {
+  const summary = addPostsToCollectionExportSummary(
+    EMPTY_COLLECTION_EXPORT_SUMMARY,
+    posts,
+  );
+  const collection = posts[0]?.collection ?? { name: null, url: '' };
 
-    expect(exports).toHaveLength(2);
-    expect(exports[0]?.fileName).toBe('sample-group_2026-08-19_2026-08-19.json');
-    expect(exports[1]?.fileName).toBe('other-group_2026-08-10_2026-08-10.json');
-    expect(exports[0]?.envelope.collection.url).toBe(
-      'https://www.facebook.com/groups/sample-group',
+  return buildCollectionExportFileName(
+    collection,
+    summary.publicationWindow,
+    EXPORTED_AT,
+  );
+}
+
+describe('buildCollectionExportFileName', () => {
+  it('names a file after the group and the window of its posts', () => {
+    expect(exportFileName([samplePost])).toBe(
+      'sample-group_2026-08-19_2026-08-19.json',
     );
-    expect(exports[1]?.envelope.collection.url).toBe(
-      'https://www.facebook.com/groups/other-group',
+    expect(exportFileName([secondGroupPost])).toBe(
+      'other-group_2026-08-10_2026-08-10.json',
     );
   });
 
@@ -106,16 +120,39 @@ describe('buildCollectionExports', () => {
       publishedAt: null,
     };
 
-    const exports = buildCollectionExports(
-      [undatedPost],
-      '0.1.0',
-      '2026-08-19T12:00:00.000Z',
+    expect(exportFileName([undatedPost])).toBe('sample-group_export-2026-08-19.json');
+  });
+});
+
+// The download path writes the header from a summary folded over pages and never
+// holds the group, so the file it produces has to be the file the whole-envelope
+// builder describes. A page size below the post count is the point: it is what
+// makes the writer cross a page boundary.
+describe('a file written a page at a time', () => {
+  it('parses back to the envelope built from every post at once', async () => {
+    const posts = [
+      samplePost,
+      { ...samplePost, identityKey: 'postId:3', externalId: '3', comments: [] },
+    ];
+    const summary = addPostsToCollectionExportSummary(
+      EMPTY_COLLECTION_EXPORT_SUMMARY,
+      posts,
     );
 
-    expect(exports[0]?.fileName).toBe('sample-group_export-2026-08-19.json');
-    expect(exports[0]?.envelope.publicationWindow).toEqual({
-      earliest: null,
-      latest: null,
+    const blob = await buildJsonRecordBlob({
+      header: buildCollectionExportHeader(
+        samplePost.collection,
+        summary,
+        '0.1.0',
+        EXPORTED_AT,
+      ),
+      recordsKey: 'posts',
+      readPage: (offset, limit) => Promise.resolve(posts.slice(offset, offset + limit)),
+      pageSize: 1,
     });
+
+    expect(JSON.parse(await readBlobText(blob))).toEqual(
+      buildCollectionExportEnvelope(posts, samplePost.collection, '0.1.0', EXPORTED_AT),
+    );
   });
 });

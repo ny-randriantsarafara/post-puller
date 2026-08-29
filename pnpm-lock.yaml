@@ -13,6 +13,9 @@ importers:
       '@extractor/capture-core':
         specifier: workspace:*
         version: link:../../packages/capture-core
+      '@extractor/capture-ui':
+        specifier: workspace:*
+        version: link:../../packages/capture-ui
       react:
         specifier: ^19.1.0
         version: 19.2.8

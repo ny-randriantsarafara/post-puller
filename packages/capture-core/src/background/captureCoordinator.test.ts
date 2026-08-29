@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { EMPTY_SCAN_STATS } from '../domain/stats';
 import { createCaptureProtocol } from '../messaging/protocol';
 import { buildEmptyCaptureSession, type CaptureSession } from '../messaging/session';
+import type { CollectionStatsDelta } from '../stats/collectionStats';
 import type { ItemRepository } from '../storage/itemRepository';
 import { createCaptureCoordinator } from './captureCoordinator';
 import type { SessionStore } from './sessionStore';
@@ -64,7 +65,9 @@ function createSessionStore(
 // Only the reads the coordinator makes on this path are answered. Anything else
 // throwing is the point: it would mean the handler touched the store, which it
 // has no reason to do for counts that never reach it.
-function createRepository(): ItemRepository<SampleItem> {
+function createRepository(
+  overrides: Partial<ItemRepository<SampleItem>> = {},
+): ItemRepository<SampleItem> {
   const unreachable = () => {
     throw new Error('The repository was not expected to be used');
   };
@@ -73,7 +76,6 @@ function createRepository(): ItemRepository<SampleItem> {
     isBetterParse: () => false,
     upsertItems: unreachable,
     countItems: unreachable,
-    countIncompleteItems: unreachable,
     listAllItems: unreachable,
     listCollectionStats: () => Promise.resolve([]),
     listItemsPage: unreachable,
@@ -81,10 +83,14 @@ function createRepository(): ItemRepository<SampleItem> {
     clearCollectionItems: unreachable,
     write: unreachable,
     read: unreachable,
+    ...overrides,
   };
 }
 
-function createCoordinator(session: CaptureSession<SampleOptions>) {
+function createCoordinator(
+  session: CaptureSession<SampleOptions>,
+  repositoryOverrides: Partial<ItemRepository<SampleItem>> = {},
+) {
   const sessionStore = createSessionStore(session);
   const coordinator = createCaptureCoordinator<SampleItem, SampleOptions>({
     domain: {
@@ -96,7 +102,14 @@ function createCoordinator(session: CaptureSession<SampleOptions>) {
         databaseName: 'sample',
         version: 1,
         itemStoreName: 'items',
-        stores: [{ name: 'items', keyPath: 'identityKey', indexes: [] }],
+        collectionIndexName: 'by_collection',
+        stores: [
+          {
+            name: 'items',
+            keyPath: 'identityKey',
+            indexes: [{ name: 'by_collection', keyPath: 'collection.url' }],
+          },
+        ],
       },
       identityKeyPrefixes: {
         externalId: 'id',
@@ -114,7 +127,7 @@ function createCoordinator(session: CaptureSession<SampleOptions>) {
       isIdentifiable: () => true,
     },
     protocol,
-    repository: createRepository(),
+    repository: createRepository(repositoryOverrides),
     sessionStore,
     copy: COPY,
   });
@@ -257,5 +270,111 @@ describe('createCaptureCoordinator counting what a scan saw', () => {
     );
 
     expect((await sessionStore.read()).scanStats).toEqual(EMPTY_SCAN_STATS);
+  });
+});
+
+const CAPTURED_ITEM: SampleItem = {
+  identityKey: 'id:1',
+  identitySource: 'externalId',
+  fingerprint: null,
+  externalId: '1',
+  externalUrl: null,
+  collection: { name: 'Sample', url: 'https://example.test/c/1' },
+  capturedAt: '2026-08-29T10:00:00.000Z',
+  updatedAt: '2026-08-29T10:00:00.000Z',
+};
+
+function buildDelta(overrides: Partial<CollectionStatsDelta> = {}): CollectionStatsDelta {
+  return {
+    collection: CAPTURED_ITEM.collection,
+    itemCount: 1,
+    incompleteItemCount: 0,
+    childCount: 0,
+    publishedAt: null,
+    capturedAt: CAPTURED_ITEM.capturedAt,
+    ...overrides,
+  };
+}
+
+// A batch arrives every second or so and the popup polls between them. Both used
+// to answer by reading and validating every stored record, which turns a long
+// conversation into a scan of itself once per batch.
+describe('createCaptureCoordinator keeping the stored totals', () => {
+  it('moves the totals by what the write reported, without counting the store', async () => {
+    const { coordinator, sessionStore } = createCoordinator(session, {
+      upsertItems: () =>
+        Promise.resolve([buildDelta({ childCount: 3, incompleteItemCount: 1 })]),
+      // listCollectionStats and listAllItems stay unreachable: reaching either
+      // here is the fault this test exists for.
+    });
+
+    await coordinator.handleBackgroundMessage(
+      { type: 'ITEMS_CAPTURED', tabId: CAPTURING_TAB_ID, items: [CAPTURED_ITEM] },
+      CAPTURING_SENDER,
+    );
+
+    expect((await sessionStore.read()).collectionStats).toEqual([
+      {
+        collection: CAPTURED_ITEM.collection,
+        itemCount: 1,
+        incompleteItemCount: 1,
+        childCount: 3,
+        publicationWindow: { earliest: null, latest: null },
+        lastCapturedAt: CAPTURED_ITEM.capturedAt,
+      },
+    ]);
+  });
+
+  it('leaves the session alone when the totals still match the store', async () => {
+    const storedStats = [
+      {
+        collection: CAPTURED_ITEM.collection,
+        itemCount: 2,
+        incompleteItemCount: 0,
+        childCount: 0,
+        publicationWindow: { earliest: null, latest: null },
+        lastCapturedAt: CAPTURED_ITEM.capturedAt,
+      },
+    ];
+    const { coordinator, sessionStore } = createCoordinator(
+      { ...session, collectionStats: storedStats },
+      { countItems: () => Promise.resolve(2) },
+    );
+    const write = vi.spyOn(sessionStore, 'write');
+
+    const response = await coordinator.handleBackgroundMessage(
+      { type: 'GET_SESSION' },
+      CAPTURING_SENDER,
+    );
+
+    expect(write).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      type: 'SESSION',
+      session: { ...session, collectionStats: storedStats },
+    });
+  });
+
+  // Data cleared from the preview page, or a record written by something other
+  // than a scan, leaves the totals behind. Comparing them against a count of the
+  // keys is what notices, and it is the only thing here that touches the store.
+  it('recounts when the totals have fallen behind the store', async () => {
+    const recounted = [
+      {
+        collection: CAPTURED_ITEM.collection,
+        itemCount: 5,
+        incompleteItemCount: 1,
+        childCount: 2,
+        publicationWindow: { earliest: null, latest: null },
+        lastCapturedAt: CAPTURED_ITEM.capturedAt,
+      },
+    ];
+    const { coordinator, sessionStore } = createCoordinator(session, {
+      countItems: () => Promise.resolve(5),
+      listCollectionStats: () => Promise.resolve(recounted),
+    });
+
+    await coordinator.handleBackgroundMessage({ type: 'GET_SESSION' }, CAPTURING_SENDER);
+
+    expect((await sessionStore.read()).collectionStats).toEqual(recounted);
   });
 });

@@ -5,15 +5,25 @@ import {
 } from '../domain/identity';
 import type { CapturedItemBase } from '../domain/item';
 import type { CollectionCaptureStats } from '../messaging/session';
-import { buildCollectionStats } from '../stats/collectionStats';
 import {
+  buildCollectionStats,
+  buildCollectionStatsDelta,
+  type CollectionStatsDelta,
+} from '../stats/collectionStats';
+import {
+  collectIndexPage,
   createDatabaseHandle,
+  deleteIndexRange,
   requestValue,
   type DatabaseHandle,
   type TransactionStores,
 } from './idb';
 
 export const FINGERPRINT_INDEX = 'by_fingerprint';
+
+// Greater than any string a record can hold, so a compound range that starts at
+// one collection url ends before the next one.
+const HIGHEST_KEY_CHARACTER = '\uffff';
 
 export type ItemPage<TItem> = {
   items: TItem[];
@@ -22,14 +32,30 @@ export type ItemPage<TItem> = {
   limit: number;
 };
 
+// Which index a page is read in order from. The order belongs to the site — a
+// group reads newest first — so the app names the indexes that provide it rather
+// than the core guessing at a field.
+export type ItemPageOrder = {
+  // Over the field the page is ordered by, for a page across every collection.
+  readonly index: string;
+  // Over [collection url, that same field], for a page limited to one.
+  readonly collectionIndex: string;
+  readonly direction: IDBCursorDirection;
+};
+
 export type ItemRepository<TItem extends CapturedItemBase> = {
   isBetterParse: (existingItem: TItem, incomingItem: TItem) => boolean;
-  upsertItems: (items: TItem[]) => Promise<number>;
+  // Answers with what the batch changed about each collection's totals, so the
+  // caller can move its counts without counting the store again.
+  upsertItems: (items: TItem[]) => Promise<CollectionStatsDelta[]>;
   countItems: () => Promise<number>;
-  countIncompleteItems: () => Promise<number>;
   listAllItems: () => Promise<TItem[]>;
+  // Reads and validates every stored record, so it belongs to the paths a user
+  // waits on deliberately: opening a scan, clearing data, exporting. Anything
+  // that runs per batch or on a timer wants the deltas above instead.
   listCollectionStats: () => Promise<CollectionCaptureStats[]>;
   listItemsPage: (
+    order: ItemPageOrder,
     offset: number,
     limit: number,
     collectionUrl?: string | null,
@@ -130,7 +156,7 @@ export function createItemRepository<
     store: IDBObjectStore,
     existingItem: TItem,
     incomingItem: TItem,
-  ): Promise<void> {
+  ): Promise<TItem> {
     const mergedItem: TItem = Object.assign(
       {},
       domain.mergeCapture(existingItem, incomingItem),
@@ -146,25 +172,30 @@ export function createItemRepository<
     }
 
     await requestValue(store.put(mergedItem));
+
+    return mergedItem;
   }
 
+  // Returns what the write changed about the collection's totals, or null when it
+  // changed nothing: a sighting no better than the record already stored is not
+  // written, so it moves no count.
   async function upsertItem(
     store: IDBObjectStore,
     incomingItem: TItem,
-  ): Promise<boolean> {
+  ): Promise<CollectionStatsDelta | null> {
     const existingItem = await findStoredItem(store, incomingItem);
 
     if (existingItem === null) {
       await requestValue(store.put(incomingItem));
-      return true;
+      return buildCollectionStatsDelta(null, incomingItem, domain.stats);
     }
 
     if (!domain.isBetterCapture(existingItem, incomingItem)) {
-      return false;
+      return null;
     }
 
-    await writeMergedItem(store, existingItem, incomingItem);
-    return false;
+    const mergedItem = await writeMergedItem(store, existingItem, incomingItem);
+    return buildCollectionStatsDelta(existingItem, mergedItem, domain.stats);
   }
 
   // Items are written one after another because two sightings of the same item
@@ -173,18 +204,18 @@ export function createItemRepository<
   async function upsertItemsInOrder(
     stores: TransactionStores,
     items: TItem[],
-  ): Promise<number> {
+  ): Promise<CollectionStatsDelta[]> {
     const store = stores.get(itemStoreName);
-    let insertedCount = 0;
+    const deltas: CollectionStatsDelta[] = [];
 
     for (const item of items) {
-      const wasInserted = await upsertItem(store, item);
-      if (wasInserted) {
-        insertedCount += 1;
+      const delta = await upsertItem(store, item);
+      if (delta !== null) {
+        deltas.push(delta);
       }
     }
 
-    return insertedCount;
+    return deltas;
   }
 
   async function listAllItems(): Promise<TItem[]> {
@@ -206,7 +237,7 @@ export function createItemRepository<
       // refused here rather than allowed to overwrite each other.
       const identifiableItems = items.filter((item) => domain.isIdentifiable(item));
       if (identifiableItems.length === 0) {
-        return 0;
+        return [];
       }
 
       return database.write([itemStoreName], (stores) =>
@@ -219,29 +250,35 @@ export function createItemRepository<
         requestValue(stores.get(itemStoreName).count()),
       ),
 
-    countIncompleteItems: async () => {
-      const items = await listAllItems();
-      return items.filter((item) => domain.stats.isIncomplete(item)).length;
-    },
-
     listCollectionStats: async () => {
       const items = await listAllItems();
       return buildCollectionStats(items, domain.stats);
     },
 
-    listItemsPage: async (offset, limit, collectionUrl = null) => {
-      const allItems = await listAllItems();
-      const filteredItems =
-        collectionUrl === null
-          ? allItems
-          : allItems.filter((item) => item.collection.url === collectionUrl);
-      const sortedItems = [...filteredItems].sort((left, right) =>
-        right.capturedAt.localeCompare(left.capturedAt),
-      );
+    listItemsPage: async (order, offset, limit, collectionUrl = null) => {
+      const page = await database.read([itemStoreName], async (stores) => {
+        const store = stores.get(itemStoreName);
+
+        if (collectionUrl === null) {
+          const index = store.index(order.index);
+          return {
+            total: await requestValue(index.count()),
+            values: await collectIndexPage(index, null, offset, limit, order.direction),
+          };
+        }
+
+        const index = store.index(order.collectionIndex);
+        const range = collectionOrderRange(collectionUrl);
+
+        return {
+          total: await requestValue(index.count(range)),
+          values: await collectIndexPage(index, range, offset, limit, order.direction),
+        };
+      });
 
       return {
-        items: sortedItems.slice(offset, offset + limit),
-        total: sortedItems.length,
+        items: parseStoredItems(page.values),
+        total: page.total,
         offset,
         limit,
       };
@@ -254,23 +291,24 @@ export function createItemRepository<
     },
 
     clearCollectionItems: async (collectionUrl) => {
-      const items = await listAllItems();
-      const identityKeys = items
-        .filter((item) => item.collection.url === collectionUrl)
-        .map((item) => item.identityKey);
-
-      if (identityKeys.length === 0) {
-        return;
-      }
-
-      await database.write([itemStoreName], async (stores) => {
-        const store = stores.get(itemStoreName);
-        await Promise.all(
-          identityKeys.map((identityKey) => requestValue(store.delete(identityKey))),
-        );
-      });
+      await database.write([itemStoreName], (stores) =>
+        deleteIndexRange(
+          stores.get(itemStoreName).index(domain.storage.collectionIndexName),
+          IDBKeyRange.only(collectionUrl),
+        ),
+      );
     },
   };
+}
+
+// Arrays compare element by element, so a bound that starts at the collection url
+// alone and ends after its highest possible second key covers exactly that
+// collection's entries.
+function collectionOrderRange(collectionUrl: string): IDBKeyRange {
+  return IDBKeyRange.bound(
+    [collectionUrl],
+    [collectionUrl, HIGHEST_KEY_CHARACTER],
+  );
 }
 
 // Two sightings that both carry a site id or url and disagree on it are

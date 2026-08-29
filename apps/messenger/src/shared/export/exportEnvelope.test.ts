@@ -1,10 +1,15 @@
+import { buildJsonRecordBlob } from '@extractor/capture-core/export';
+import { readBlobText } from '@extractor/capture-core/testing/readBlobText';
 import { describe, expect, it } from 'vitest';
 import type { CapturedMessage } from '../types/capturedMessage';
 import { buildSortKey } from '../types/capturedMessage';
 import type { CapturedThread } from '../types/thread';
 import {
-  buildThreadExport,
+  addMessagesToThreadExportSummary,
   buildThreadExportEnvelope,
+  buildThreadExportFileName,
+  buildThreadExportHeader,
+  EMPTY_THREAD_EXPORT_SUMMARY,
   EXPORT_SCHEMA_VERSION,
 } from './exportEnvelope';
 
@@ -92,6 +97,25 @@ describe('buildThreadExportEnvelope', () => {
     expect(envelope.messages.map((message) => message.text)).toEqual([
       'Message 1',
       'Message 2',
+    ]);
+  });
+
+  // The '~' a sort key without a resolved date begins with was chosen because it
+  // sorts after every digit, which is how the stored index orders it. A locale
+  // comparison sorts it first instead, and put the undated messages at the top of
+  // the exported file, above a conversation they may predate by years.
+  it('puts a message with no resolved date at the end, as the store does', () => {
+    const envelope = buildThreadExportEnvelope(
+      createThread(),
+      [createUnresolvedMessage(3), createMessage(1), createMessage(2)],
+      '0.1.0',
+      EXPORTED_AT,
+    );
+
+    expect(envelope.messages.map((message) => message.sentAt === null)).toEqual([
+      false,
+      false,
+      true,
     ]);
   });
 
@@ -214,39 +238,40 @@ describe('export warnings', () => {
   });
 });
 
-describe('buildThreadExport', () => {
+// Named the way the download path names it: from the window the summary carried
+// out of the messages, not from the messages themselves.
+function exportFileName(
+  thread: CapturedThread,
+  messages: readonly CapturedMessage[],
+): string {
+  const summary = addMessagesToThreadExportSummary(
+    EMPTY_THREAD_EXPORT_SUMMARY,
+    messages,
+  );
+
+  return buildThreadExportFileName(thread, summary.conversationWindow, EXPORTED_AT);
+}
+
+describe('buildThreadExportFileName', () => {
   it('names the file after the title and the window of its messages', () => {
-    const { fileName } = buildThreadExport(
-      createThread(),
-      [
-        createMessage(1, { sentAt: '2026-07-15T17:38:00.000Z' }),
-        createMessage(2, { sentAt: '2026-08-19T12:00:00.000Z' }),
-      ],
-      '0.1.0',
-      EXPORTED_AT,
-    );
+    const fileName = exportFileName(createThread(), [
+      createMessage(1, { sentAt: '2026-07-15T17:38:00.000Z' }),
+      createMessage(2, { sentAt: '2026-08-19T12:00:00.000Z' }),
+    ]);
 
     expect(fileName).toBe('alex-moreau_2026-07-15_2026-08-19.json');
   });
 
   it('falls back to the export day when no message has a resolved date', () => {
-    const { fileName } = buildThreadExport(
-      createThread(),
-      [createUnresolvedMessage(1)],
-      '0.1.0',
-      EXPORTED_AT,
-    );
+    const fileName = exportFileName(createThread(), [createUnresolvedMessage(1)]);
 
     expect(fileName).toBe('alex-moreau_export-2026-08-29.json');
   });
 
   it('strips accents and punctuation from a title', () => {
-    const { fileName } = buildThreadExport(
-      createThread({ title: 'Équipe Été — Café !' }),
-      [createMessage(1, { sentAt: '2026-08-19T12:00:00.000Z' })],
-      '0.1.0',
-      EXPORTED_AT,
-    );
+    const fileName = exportFileName(createThread({ title: 'Équipe Été — Café !' }), [
+      createMessage(1, { sentAt: '2026-08-19T12:00:00.000Z' }),
+    ]);
 
     expect(fileName).toBe('equipe-ete-cafe_2026-08-19_2026-08-19.json');
   });
@@ -254,13 +279,41 @@ describe('buildThreadExport', () => {
   // A group can be named entirely in a script the slug drops, and an untitled
   // thread has no name at all; neither may produce a file called `.json`.
   it('names the file after the thread id when the title has no slug', () => {
-    const { fileName } = buildThreadExport(
-      createThread({ title: '???' }),
-      [createMessage(1, { sentAt: '2026-08-19T12:00:00.000Z' })],
-      '0.1.0',
-      EXPORTED_AT,
-    );
+    const fileName = exportFileName(createThread({ title: '???' }), [
+      createMessage(1, { sentAt: '2026-08-19T12:00:00.000Z' }),
+    ]);
 
     expect(fileName).toBe(`${THREAD_ID}_2026-08-19_2026-08-19.json`);
+  });
+});
+
+// The download path writes the header from a summary folded over pages and never
+// holds the thread, so the file it produces has to be the file the whole-envelope
+// builder describes. A page size below the message count is the point: it is what
+// makes the writer cross a page boundary.
+describe('a file written a page at a time', () => {
+  it('parses back to the envelope built from every message at once', async () => {
+    const thread = createThread();
+    const messages = [
+      createMessage(1, { reactions: [{ emoji: '👍', count: 2 }] }),
+      createMessage(2, { warnings: ['INFERRED_TIMESTAMP'] }),
+      createUnresolvedMessage(3),
+    ];
+    const summary = addMessagesToThreadExportSummary(
+      EMPTY_THREAD_EXPORT_SUMMARY,
+      messages,
+    );
+
+    const blob = await buildJsonRecordBlob({
+      header: buildThreadExportHeader(thread, summary, '0.1.0', EXPORTED_AT),
+      recordsKey: 'messages',
+      readPage: (offset, limit) =>
+        Promise.resolve(messages.slice(offset, offset + limit)),
+      pageSize: 2,
+    });
+
+    expect(JSON.parse(await readBlobText(blob))).toEqual(
+      buildThreadExportEnvelope(thread, messages, '0.1.0', EXPORTED_AT),
+    );
   });
 });

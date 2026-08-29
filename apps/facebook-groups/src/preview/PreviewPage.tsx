@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { downloadCollectionExports } from '../shared/export/exportEnvelope';
+import { downloadCollectionExports } from '../shared/export/downloadExport';
 import { listCollectionStats, listPostsPage } from '../shared/storage/postRepository';
 import {
   formatPublicationWindow,
@@ -116,15 +116,18 @@ export function PreviewPage() {
     void loadPage(0, collectionUrl);
   }, [loadPage, selectedGroupUrl]);
 
+  // Driven by the group summaries the page already loaded, so exporting reads each
+  // group's posts a page at a time rather than the whole store at once.
   const handleExport = async () => {
-    const allPostsPage = await listPostsPage(0, Number.MAX_SAFE_INTEGER);
-    const postsToExport =
-      selectedGroupUrl === ALL_GROUPS
-        ? allPostsPage.posts
-        : allPostsPage.posts.filter((post) => post.collection.url === selectedGroupUrl);
+    const collectionsToExport = collectionStats
+      .map((stats) => stats.collection)
+      .filter(
+        (collection) =>
+          selectedGroupUrl === ALL_GROUPS || collection.url === selectedGroupUrl,
+      );
 
-    downloadCollectionExports(
-      postsToExport,
+    await downloadCollectionExports(
+      collectionsToExport,
       chrome.runtime.getManifest().version,
       new Date().toISOString(),
     );

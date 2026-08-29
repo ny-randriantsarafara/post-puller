@@ -1,9 +1,14 @@
 import { judgeScanStats } from '@extractor/capture-core/domain';
-import { useCallback, useEffect, useState } from 'react';
 import {
-  downloadCollectionExports,
-} from '../shared/export/exportEnvelope';
-import { listPostsPage } from '../shared/storage/postRepository';
+  CaptureOptionsPanel,
+  MetricCard,
+  ScanModeSelector,
+  StatusBadge,
+  type CaptureOptionRow,
+  type ScanModeOption,
+} from '@extractor/capture-ui';
+import { useCallback, useEffect, useState } from 'react';
+import { downloadCollectionExports } from '../shared/export/downloadExport';
 import { trySendBackgroundRequest } from '../shared/messaging/client';
 import type { BackgroundRequest } from '../shared/messaging/protocol';
 import {
@@ -13,11 +18,41 @@ import {
 import type { CaptureMode, CaptureSession } from '../shared/types';
 import { DEFAULT_CAPTURE_OPTIONS, type CaptureOptions } from '../shared/types';
 import { EMPTY_CAPTURE_SESSION } from '../shared/types';
-import { CaptureOptionsPanel } from './components/CaptureOptionsPanel';
 import { CollectionStatsList } from './components/CollectionStatsList';
-import { MetricCard } from './components/MetricCard';
-import { ScanModeSelector } from './components/ScanModeSelector';
-import { StatusBadge } from './components/StatusBadge';
+
+const SCAN_MODE_OPTIONS: readonly ScanModeOption[] = [
+  {
+    value: 'manual',
+    label: 'Manual scan',
+    hint: 'You scroll the group yourself.',
+  },
+  {
+    value: 'auto',
+    label: 'Automatic scan',
+    hint: 'The page scrolls itself until the feed stops loading.',
+  },
+];
+
+const CAPTURE_OPTION_ROWS: readonly CaptureOptionRow<CaptureOptions>[] = [
+  {
+    kind: 'toggle',
+    key: 'expandPostText',
+    label: 'Expand post text while capturing',
+    hint: 'Clicks See more / Voir plus inside post messages.',
+  },
+  {
+    kind: 'toggle',
+    key: 'expandComments',
+    label: 'Expand comments while capturing (slower)',
+    hint: 'Clicks View more comments and reply expanders a few times per post.',
+  },
+  {
+    kind: 'toggle',
+    key: 'captureReactions',
+    label: 'Capture reactions',
+    hint: 'Stores reaction totals and the visible per-type breakdown from the feed.',
+  },
+];
 
 function getActiveGroupLabel(session: CaptureSession): string {
   if (session.collectionName !== null && session.collectionName.trim().length > 0) {
@@ -220,10 +255,12 @@ export function App() {
     void chrome.tabs.create({ url: previewUrl });
   };
 
+  // The groups to write come from the counts the popup already shows, so the
+  // export reads each group's posts once instead of reading the whole store to
+  // discover which groups are in it.
   const handleExportJson = async () => {
-    const allPostsPage = await listPostsPage(0, Number.MAX_SAFE_INTEGER);
-    downloadCollectionExports(
-      allPostsPage.posts,
+    await downloadCollectionExports(
+      session.collectionStats.map((stats) => stats.collection),
       chrome.runtime.getManifest().version,
       new Date().toISOString(),
     );
@@ -244,7 +281,7 @@ export function App() {
   return (
     <main className="popup">
       <h1 className="popup__title">Facebook Group Capture</h1>
-      <StatusBadge session={session} />
+      <StatusBadge status={session.status} />
 
       <div className="popup__metrics">
         <MetricCard
@@ -267,12 +304,15 @@ export function App() {
 
       <ScanModeSelector
         mode={selectedMode}
+        options={SCAN_MODE_OPTIONS}
         isDisabled={isBusy || isCapturing}
         onModeChange={setRequestedMode}
       />
 
       <CaptureOptionsPanel
+        legend="Capture options"
         options={selectedOptions}
+        rows={CAPTURE_OPTION_ROWS}
         isDisabled={isBusy || isCapturing}
         onOptionsChange={setRequestedOptions}
       />

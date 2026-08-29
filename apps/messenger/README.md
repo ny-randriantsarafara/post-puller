@@ -108,6 +108,13 @@ the window of the messages inside it, for example
 `alex-moreau_2026-07-15_2026-08-19.json`. When no message has a resolved date, the export
 day is used instead: `alex-moreau_export-2026-08-29.json`.
 
+The conversation is read a page at a time and each page is appended to the file, so a
+thread of any length costs one page of memory rather than the whole file twice over. The
+fields below are shown indented for reading; the file itself is written with one message
+per line, which keeps it greppable without spending a fifth of its bytes on indentation.
+Messages are in the order they are stored: oldest first, with any message whose date never
+resolved at the end.
+
 ```json
 {
   "schemaVersion": 1,

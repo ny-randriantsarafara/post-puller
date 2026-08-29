@@ -8,11 +8,13 @@
     "./content": "./src/content/index.ts",
     "./domain": "./src/domain/index.ts",
     "./errorMessage": "./src/errorMessage.ts",
+    "./export": "./src/export/index.ts",
     "./identity": "./src/identity/index.ts",
     "./messaging": "./src/messaging/index.ts",
     "./result": "./src/result.ts",
     "./stats": "./src/stats/index.ts",
     "./storage": "./src/storage/index.ts",
+    "./testing/readBlobText": "./src/testing/readBlobText.ts",
     "./testing/setup": "./src/testing/setup.ts",
     "./time": "./src/time/index.ts"
   },

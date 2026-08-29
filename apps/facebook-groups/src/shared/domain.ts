@@ -11,6 +11,10 @@ import { DEFAULT_CAPTURE_OPTIONS } from './types/captureOptions';
 
 const GROUP_URL_PATTERN = /^https:\/\/(www\.)?facebook\.com\/groups\/[^/?#]+/;
 
+export const COLLECTION_INDEX = 'by_collection';
+export const CAPTURED_AT_INDEX = 'by_captured_at';
+export const COLLECTION_CAPTURED_AT_INDEX = 'by_collection_captured_at';
+
 export const POST_STATS_PROJECTION: StatsProjection<CapturedPost> = {
   countChildren: (post) => post.comments.length,
   readPublishedAt: (post) => post.publishedAt,
@@ -27,13 +31,28 @@ export const facebookGroupsDomain: CaptureDomain<CapturedPost, CaptureOptions> =
     // Bumped for the rename to generic item fields. There is no upgrade work to
     // do: stored records are migrated as they are read, and identityKey, the
     // primary key, deliberately did not change.
-    version: 3,
+    // Raised for the three indexes below. Records missing an indexed field are
+    // left out of the index rather than failing the upgrade, so there is again
+    // no upgrade work to do beyond declaring them.
+    version: 4,
     itemStoreName: 'capturedPosts',
+    collectionIndexName: COLLECTION_INDEX,
     stores: [
       {
         name: 'capturedPosts',
         keyPath: 'identityKey',
-        indexes: [{ name: 'by_fingerprint', keyPath: 'fingerprint' }],
+        indexes: [
+          { name: 'by_fingerprint', keyPath: 'fingerprint' },
+          { name: COLLECTION_INDEX, keyPath: 'collection.url' },
+          // The preview reads newest first, across one group or all of them, and
+          // pages through with a cursor rather than reading every post to show
+          // twenty of them.
+          { name: CAPTURED_AT_INDEX, keyPath: 'capturedAt' },
+          {
+            name: COLLECTION_CAPTURED_AT_INDEX,
+            keyPath: ['collection.url', 'capturedAt'],
+          },
+        ],
       },
     ],
   },

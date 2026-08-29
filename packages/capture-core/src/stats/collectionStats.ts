@@ -102,6 +102,115 @@ export function buildCollectionStats<TItem extends CapturedItemBase>(
     .sort((left, right) => right.lastCapturedAt.localeCompare(left.lastCapturedAt));
 }
 
+// What one written record changed about its collection's totals. Produced where
+// the write happens, because that is the only place that holds both the record
+// that was there and the one that replaced it: a re-sighting of a message
+// already stored adds no item but can turn an incomplete one complete.
+export type CollectionStatsDelta = {
+  readonly collection: CollectionInfo;
+  readonly itemCount: number;
+  readonly incompleteItemCount: number;
+  readonly childCount: number;
+  readonly publishedAt: string | null;
+  readonly capturedAt: string;
+};
+
+export function buildCollectionStatsDelta<TItem extends CapturedItemBase>(
+  existingItem: TItem | null,
+  writtenItem: TItem,
+  projection: StatsProjection<TItem>,
+): CollectionStatsDelta {
+  const wasIncomplete = existingItem !== null && projection.isIncomplete(existingItem);
+  const previousChildCount =
+    existingItem === null ? 0 : projection.countChildren(existingItem);
+
+  return {
+    collection: writtenItem.collection,
+    itemCount: existingItem === null ? 1 : 0,
+    incompleteItemCount:
+      Number(projection.isIncomplete(writtenItem)) - Number(wasIncomplete),
+    childCount: projection.countChildren(writtenItem) - previousChildCount,
+    publishedAt: projection.readPublishedAt(writtenItem),
+    capturedAt: writtenItem.capturedAt,
+  };
+}
+
+function widenPublicationWindow(
+  window: PublicationWindow,
+  publishedAt: string | null,
+): PublicationWindow {
+  if (publishedAt === null) {
+    return window;
+  }
+
+  return {
+    earliest:
+      window.earliest === null || publishedAt < window.earliest
+        ? publishedAt
+        : window.earliest,
+    latest:
+      window.latest === null || publishedAt > window.latest
+        ? publishedAt
+        : window.latest,
+  };
+}
+
+const EMPTY_STATS: Omit<CollectionCaptureStats, 'collection' | 'lastCapturedAt'> = {
+  itemCount: 0,
+  incompleteItemCount: 0,
+  childCount: 0,
+  publicationWindow: { earliest: null, latest: null },
+};
+
+function addDelta(
+  stats: CollectionCaptureStats | undefined,
+  delta: CollectionStatsDelta,
+): CollectionCaptureStats {
+  const base = stats ?? {
+    ...EMPTY_STATS,
+    collection: delta.collection,
+    lastCapturedAt: delta.capturedAt,
+  };
+
+  return {
+    // The name can arrive later than the first record of a collection, so a
+    // delta that carries one replaces a placeholder rather than being ignored.
+    collection: delta.collection.name === null ? base.collection : delta.collection,
+    itemCount: base.itemCount + delta.itemCount,
+    incompleteItemCount: base.incompleteItemCount + delta.incompleteItemCount,
+    childCount: base.childCount + delta.childCount,
+    publicationWindow: widenPublicationWindow(
+      base.publicationWindow,
+      delta.publishedAt,
+    ),
+    lastCapturedAt:
+      delta.capturedAt > base.lastCapturedAt ? delta.capturedAt : base.lastCapturedAt,
+  };
+}
+
+// Applied to the totals a scan started from, so the popup moves with a batch
+// without the store being read again. A full count is what the scan begins with
+// and what a deletion goes back to.
+export function applyCollectionStatsDeltas(
+  collectionStats: readonly CollectionCaptureStats[],
+  deltas: readonly CollectionStatsDelta[],
+): CollectionCaptureStats[] {
+  const statsByCollectionUrl = new Map(
+    collectionStats.map((stats) => [stats.collection.url, stats]),
+  );
+
+  for (const delta of deltas) {
+    statsByCollectionUrl.set(
+      delta.collection.url,
+      addDelta(statsByCollectionUrl.get(delta.collection.url), delta),
+    );
+  }
+
+  return [...statsByCollectionUrl.values()].sort((left, right) =>
+    right.lastCapturedAt.localeCompare(left.lastCapturedAt),
+  );
+}
+
 export function sumCollectionStats(
   collectionStats: CollectionCaptureStats[],
 ): CollectionStatsTotals {
