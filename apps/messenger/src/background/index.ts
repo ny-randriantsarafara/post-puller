@@ -1,8 +1,8 @@
 import { toErrorMessage } from '@extractor/capture-core/errorMessage';
 import { capturedMessageSchema } from '../shared/messaging/protocol';
-import { messageRepository } from '../shared/storage/messageRepository';
-import type { ScanStopReason } from '../shared/types/thread';
+import { readThreadIdFromUrl, type ScanStopReason } from '../shared/types/thread';
 import { handleBackgroundMessage, registerLifecycleHandlers } from './captureCoordinator';
+import { sessionStore } from './sessionStore';
 import {
   handleThreadRequest,
   parseThreadRequest,
@@ -57,13 +57,13 @@ function readThreadIdFromItems(message: unknown): string | null {
   return null;
 }
 
-async function readActiveThreadId(): Promise<string | null> {
-  const threads = await messageRepository.listThreads();
-  const mostRecent = [...threads].sort((left, right) =>
-    right.lastScannedAt.localeCompare(left.lastScannedAt),
-  );
-
-  return mostRecent[0]?.threadId ?? null;
+// Stopping and interrupting carry no messages, so the thread has to come from
+// the session. Its URL is the conversation the scan was started on; the most
+// recently scanned thread would be a guess, and a wrong one for anybody who
+// scans a second conversation.
+async function readSessionThreadId(): Promise<string | null> {
+  const session = await sessionStore.read();
+  return readThreadIdFromUrl(session.collectionUrl);
 }
 
 async function recordThreadProgress(message: unknown): Promise<void> {
@@ -72,7 +72,7 @@ async function recordThreadProgress(message: unknown): Promise<void> {
     return;
   }
 
-  const threadId = readThreadIdFromItems(message) ?? (await readActiveThreadId());
+  const threadId = readThreadIdFromItems(message) ?? (await readSessionThreadId());
   if (threadId === null) {
     return;
   }

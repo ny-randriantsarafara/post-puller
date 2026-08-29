@@ -16,7 +16,7 @@ import {
 } from './parsing/parseDateSeparator';
 import { findMessageElements, parseMessage } from './parsing/parseMessage';
 import { SELECTORS } from './parsing/selectors';
-import { resolveThreadPageTarget, resolveThreadTarget } from './threadPage';
+import { resolveThreadPageTarget } from './threadPage';
 import type { ThreadScan } from './threadScan';
 import { resolveThreadScrollTarget } from './threadScrollTarget';
 
@@ -36,8 +36,7 @@ export function createMessengerSiteAdapter(
   let anchorsByMessage = new Map<Element, DateAnchor>();
 
   function resolveThreadId(): string {
-    const fromUrl = resolveThreadTarget().threadId;
-    return scan.canonicalThreadId ?? fromUrl ?? 'unknown-thread';
+    return scan.resolveThreadId() ?? 'unknown-thread';
   }
 
   return {

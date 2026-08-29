@@ -20,8 +20,14 @@ function loadThread(name: string): void {
   document.body.innerHTML = readFileSync(join(fixturesDirectory, name), 'utf8');
 }
 
+// A conversation has to be on screen for the adapter to have a thread to write
+// under, and the canonical id is only ever about the one that is.
+function openConversation(threadId: string): void {
+  window.history.replaceState({}, '', `/t/${threadId}`);
+}
+
 function createAdapter(scan: ThreadScan = createThreadScan()) {
-  scan.setCanonicalThreadId(scan.canonicalThreadId ?? THREAD_ID);
+  openConversation(THREAD_ID);
   return createMessengerSiteAdapter(scan);
 }
 
@@ -128,8 +134,9 @@ describe('messengerSiteAdapter', () => {
   // records even when reached by its numeric id.
   it('writes under the canonical thread id rather than the one in the url', async () => {
     loadThread('thread-same-day.html');
+    openConversation(THREAD_ID);
     const scan = createThreadScan();
-    scan.setCanonicalThreadId('alice.dupont');
+    scan.setCanonicalThreadId(THREAD_ID, 'alice.dupont');
 
     const messages = await captureThread(createMessengerSiteAdapter(scan));
 

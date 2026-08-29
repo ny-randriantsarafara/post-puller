@@ -8,9 +8,17 @@
         margin: 0;
       }
 
-      /* The log itself does not scroll: an ancestor does. Finding that ancestor
-         needs real computed styles, which is why it can only be exercised here
-         and not in a unit test. */
+      /* The log does not scroll. Measured on a live conversation, the element
+         that does sits two levels below it and carries role="none", while the
+         log and the wrapper between them overflow visibly without scrolling.
+         Placing them the other way round is what let a resolver that walks
+         upward pass here and find nothing on the real site. */
+      #log,
+      #wrapper {
+        height: 400px;
+        overflow-y: visible;
+      }
+
       #panel {
         height: 400px;
         overflow-y: auto;
@@ -22,27 +30,29 @@
     </style>
   </head>
   <body>
-    <div id="panel">
-      <div id="log" role="log" aria-label="Messages in conversation with Alex Moreau">
-        <div aria-hidden="true" data-scope="date_break">
-          <span dir="auto"><span>19 Aug 2026, 09:00</span></span>
-        </div>
-        <div role="article">
-          <div
-            aria-label="At 09:00, Alex Moreau: the message already on screen"
-            aria-roledescription="message"
-            data-message-id="mid.$rendered00000001"
-          >
-            <div dir="auto">the message already on screen</div>
+    <div id="log" role="log" aria-label="Messages in conversation with Alex Moreau">
+      <div id="wrapper">
+        <div id="panel" role="none">
+          <div aria-hidden="true" data-scope="date_break">
+            <span dir="auto"><span>19 Aug 2026, 09:00</span></span>
           </div>
-        </div>
-        <div role="article">
-          <div
-            aria-label="At 09:30, You: the reply already on screen"
-            aria-roledescription="message"
-            data-message-id="mid.$rendered00000002"
-          >
-            <div dir="auto">the reply already on screen</div>
+          <div role="article">
+            <div
+              aria-label="At 09:00, Alex Moreau: the message already on screen"
+              aria-roledescription="message"
+              data-message-id="mid.$rendered00000001"
+            >
+              <div dir="auto">the message already on screen</div>
+            </div>
+          </div>
+          <div role="article">
+            <div
+              aria-label="At 09:30, You: the reply already on screen"
+              aria-roledescription="message"
+              data-message-id="mid.$rendered00000002"
+            >
+              <div dir="auto">the reply already on screen</div>
+            </div>
           </div>
         </div>
       </div>
@@ -59,7 +69,8 @@
         { separator: 'Thu 08:05', at: '08:05', sender: 'You' },
       ];
 
-      const log = document.getElementById('log');
+      // The scrolling element is also the one the message groups are added to,
+      // as it is on the real site.
       const panel = document.getElementById('panel');
       let loadedGroups = 0;
 
@@ -69,7 +80,7 @@
       function prependGroup(group, index) {
         const heightBefore = panel.scrollHeight;
 
-        log.insertAdjacentHTML(
+        panel.insertAdjacentHTML(
           'afterbegin',
           `
             <div aria-hidden="true" data-scope="date_break">
@@ -100,7 +111,7 @@
       function recycleRowsBelowViewport() {
         const viewportBottom = panel.scrollTop + panel.clientHeight;
 
-        for (const article of log.querySelectorAll('[role="article"]')) {
+        for (const article of panel.querySelectorAll('[role="article"]')) {
           if (article.dataset.virtualized === 'true') {
             continue;
           }

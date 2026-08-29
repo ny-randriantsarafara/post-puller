@@ -4,6 +4,8 @@ import { DEFAULT_SCAN_OPTIONS, type ScanOptions } from '../shared/types/scanOpti
 import { createThreadScan } from './threadScan';
 
 const THREAD_ID = '61550123456789';
+const CANONICAL_THREAD_ID = '61550999888777';
+const OTHER_THREAD_ID = 'alex.moreau';
 
 function createMessage(index: number, sentAt: string | null): CapturedMessage {
   return {
@@ -43,19 +45,31 @@ function withOptions(overrides: Partial<ScanOptions>): ScanOptions {
   return { ...DEFAULT_SCAN_OPTIONS, ...overrides };
 }
 
-// The scroll panel the scan reads its outcome from. Whether it sits at the top
-// is the whole difference between a conversation read to its first message and
-// one that stopped answering.
+// The scroll panel the scan reads its outcome from, in the shape a live
+// conversation has: the element that scrolls sits below the log and holds the
+// message rows. Whether it sits at the top is the whole difference between a
+// conversation read to its first message and one that stopped answering.
 function renderThread(scrollTop: number): void {
-  document.body.innerHTML = '<div role="log"></div>';
-  const log = document.querySelector('div[role="log"]');
-  if (log === null) {
+  document.body.innerHTML = `
+    <div role="log">
+      <div>
+        <div id="panel" role="none" style="overflow-y: auto">
+          <div role="article">
+            <div data-message-id="mid.$one" aria-roledescription="message"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const panel = document.querySelector('#panel');
+  if (panel === null) {
     throw new Error('The thread panel was not rendered');
   }
 
-  Object.defineProperty(log, 'scrollTop', { configurable: true, value: scrollTop });
-  Object.defineProperty(log, 'scrollHeight', { configurable: true, value: 6000 });
-  Object.defineProperty(log, 'clientHeight', { configurable: true, value: 800 });
+  Object.defineProperty(panel, 'scrollTop', { configurable: true, value: scrollTop });
+  Object.defineProperty(panel, 'scrollHeight', { configurable: true, value: 6000 });
+  Object.defineProperty(panel, 'clientHeight', { configurable: true, value: 800 });
 }
 
 const sentMessages: unknown[] = [];
@@ -161,11 +175,49 @@ describe('createThreadScan bounds', () => {
   });
 });
 
+describe('createThreadScan thread identity', () => {
+  it('uses the id in the URL when no lookup has answered', () => {
+    const scan = createThreadScan();
+
+    expect(scan.resolveThreadId()).toBe(THREAD_ID);
+  });
+
+  // A conversation first captured under a vanity handle keeps writing to those
+  // records when reached by its numeric id.
+  it('uses the canonical id resolved for the conversation on screen', () => {
+    const scan = createThreadScan();
+
+    scan.setCanonicalThreadId(THREAD_ID, CANONICAL_THREAD_ID);
+
+    expect(scan.resolveThreadId()).toBe(CANONICAL_THREAD_ID);
+  });
+
+  // Messenger switches conversation by pushState, so one content script sees
+  // several conversations. Applying the previous conversation's id to this one
+  // files these messages under that conversation, and leaves the one on screen
+  // reporting nothing captured.
+  it('ignores a canonical id resolved for a different conversation', () => {
+    const scan = createThreadScan();
+    scan.setCanonicalThreadId(THREAD_ID, CANONICAL_THREAD_ID);
+
+    window.history.replaceState({}, '', `/t/${OTHER_THREAD_ID}`);
+
+    expect(scan.resolveThreadId()).toBe(OTHER_THREAD_ID);
+  });
+
+  it('has no thread to write under away from a conversation', () => {
+    const scan = createThreadScan();
+    window.history.replaceState({}, '', '/');
+
+    expect(scan.resolveThreadId()).toBeNull();
+  });
+});
+
 describe('createThreadScan outcome', () => {
   it('reports a conversation read to its first message', () => {
     renderThread(0);
     const scan = createThreadScan();
-    scan.setCanonicalThreadId(THREAD_ID);
+    scan.setCanonicalThreadId(THREAD_ID, THREAD_ID);
 
     scan.onScrollingEnded(true, DEFAULT_SCAN_OPTIONS);
 
@@ -186,7 +238,7 @@ describe('createThreadScan outcome', () => {
   it('reports a conversation that stopped answering as blocked', () => {
     renderThread(2400);
     const scan = createThreadScan();
-    scan.setCanonicalThreadId(THREAD_ID);
+    scan.setCanonicalThreadId(THREAD_ID, THREAD_ID);
 
     scan.onScrollingEnded(true, DEFAULT_SCAN_OPTIONS);
 
@@ -195,10 +247,23 @@ describe('createThreadScan outcome', () => {
     ]);
   });
 
+  // A conversation whose scrolling element cannot be found has not been read to
+  // its start; it has told us nothing. Calling that a success is what would mark
+  // every partial capture complete after a Messenger layout change.
+  it('reports a conversation with no scrolling element as blocked', () => {
+    document.body.innerHTML = '<div role="log"></div>';
+    const scan = createThreadScan();
+    scan.setCanonicalThreadId(THREAD_ID, THREAD_ID);
+
+    scan.onScrollingEnded(true, DEFAULT_SCAN_OPTIONS);
+
+    expect(sentMessages).toEqual([expect.objectContaining({ stopReason: 'blocked' })]);
+  });
+
   it('reports a scan that stopped at a bound the user set', () => {
     const scan = createThreadScan();
     const options = withOptions({ stopAtMessageLimit: 5 });
-    scan.setCanonicalThreadId(THREAD_ID);
+    scan.setCanonicalThreadId(THREAD_ID, THREAD_ID);
 
     scan.beginScan();
     scan.shouldKeepScrolling(createBatch(1, 6), options);
@@ -214,7 +279,7 @@ describe('createThreadScan outcome', () => {
     vi.setSystemTime(new Date('2026-08-29T09:00:00.000Z'));
 
     const scan = createThreadScan();
-    scan.setCanonicalThreadId(THREAD_ID);
+    scan.setCanonicalThreadId(THREAD_ID, THREAD_ID);
 
     scan.beginScan();
     vi.setSystemTime(new Date('2026-08-29T13:00:00.000Z'));
@@ -230,7 +295,7 @@ describe('createThreadScan outcome', () => {
   // the same conversation reached by its other handle keeps one set of records.
   it('records the id in the url as an alias of the canonical thread', () => {
     const scan = createThreadScan();
-    scan.setCanonicalThreadId('alice.dupont');
+    scan.setCanonicalThreadId(THREAD_ID, 'alice.dupont');
 
     scan.onScrollingEnded(true, DEFAULT_SCAN_OPTIONS);
 

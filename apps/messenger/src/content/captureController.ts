@@ -18,16 +18,10 @@ const controller = createCaptureController({
 // content script's indexedDB belongs to the page rather than the extension, so
 // the answer has to come from the service worker. It is asked for as soon as a
 // thread is on screen, well before the user can start a scan.
-async function refreshCanonicalThreadId(): Promise<void> {
-  const target = resolveThreadTarget();
-  if (target.threadId === null) {
-    scan.setCanonicalThreadId(null);
-    return;
-  }
-
+async function refreshCanonicalThreadId(threadId: string): Promise<void> {
   const response: unknown = await chrome.runtime.sendMessage({
     type: 'RESOLVE_CANONICAL_THREAD_ID',
-    candidateIds: [target.threadId],
+    candidateIds: [threadId],
   });
 
   const parsed = threadResponseSchema.safeParse(response);
@@ -35,25 +29,42 @@ async function refreshCanonicalThreadId(): Promise<void> {
     return;
   }
 
-  scan.setCanonicalThreadId(parsed.data.threadId);
+  scan.setCanonicalThreadId(threadId, parsed.data.threadId);
 }
 
 // The extension can be reloaded while this script still runs in the page, which
-// rejects the message rather than answering it. The adapter falls back to the id
-// in the URL, which is the right answer for a thread never captured before.
-function requestCanonicalThreadId(): void {
-  void refreshCanonicalThreadId().catch(() => {
-    scan.setCanonicalThreadId(null);
-  });
+// rejects the message rather than answering it. The scan falls back to the id in
+// the URL, which is the right answer for a thread never captured before.
+function requestCanonicalThreadId(threadId: string): void {
+  void refreshCanonicalThreadId(threadId).catch(() => undefined);
 }
+
+// Messenger switches conversation by pushState, which fires no event a page can
+// listen for: `popstate` covers only the back and forward buttons. The id in the
+// URL is therefore polled, so that opening a second conversation asks about that
+// conversation rather than leaving the answer about the first one in place.
+const THREAD_CHANGE_POLL_MS = 1000;
 
 export function initializeCaptureController(): void {
   controller.initialize();
-  requestCanonicalThreadId();
 
-  // Messenger moves between conversations without a document load, so the thread
-  // can change under a content script that is already running.
-  window.addEventListener('popstate', requestCanonicalThreadId);
+  let lastThreadId: string | null = null;
+
+  function checkForThreadChange(): void {
+    const threadId = resolveThreadTarget().threadId;
+    if (threadId === lastThreadId) {
+      return;
+    }
+
+    lastThreadId = threadId;
+
+    if (threadId !== null) {
+      requestCanonicalThreadId(threadId);
+    }
+  }
+
+  checkForThreadChange();
+  window.setInterval(checkForThreadChange, THREAD_CHANGE_POLL_MS);
 }
 
 export const handleContentMessage = controller.handleContentMessage;

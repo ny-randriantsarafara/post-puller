@@ -13,6 +13,45 @@ export function resolveThreadIdSource(threadId: string): ThreadIdSource {
   return 'vanity';
 }
 
+// A thread is reachable under two origins with different path prefixes, and the
+// <id> segment is the same under both. Stripping the origin and the prefix is
+// therefore all it takes to recognise one conversation across both surfaces.
+const THREAD_PATH_PATTERNS = [
+  /^\/t\/([^/?#]+)/,
+  /^\/messages\/t\/([^/?#]+)/,
+  /^\/e2ee\/t\/([^/?#]+)/,
+  /^\/messages\/e2ee\/t\/([^/?#]+)/,
+];
+
+export const ENCRYPTED_THREAD_PATH = /^(?:\/messages)?\/e2ee\/t\//;
+
+export function readThreadIdFromPath(pathname: string): string | null {
+  for (const pattern of THREAD_PATH_PATTERNS) {
+    const match = pattern.exec(pathname);
+    const threadId = match?.[1];
+    if (threadId !== undefined && threadId.length > 0) {
+      return decodeURIComponent(threadId);
+    }
+  }
+
+  return null;
+}
+
+// Lives here rather than in the content script because the service worker reads
+// thread ids too: it holds the conversation a session was started on as a URL,
+// and that is the only trustworthy name it has for the thread it writes to.
+export function readThreadIdFromUrl(url: string | null): string | null {
+  if (url === null) {
+    return null;
+  }
+
+  try {
+    return readThreadIdFromPath(new URL(url).pathname);
+  } catch {
+    return null;
+  }
+}
+
 // Why a scan stopped, kept apart from whether it succeeded. Only the first one
 // means the thread was read all the way back to its first message.
 export const SCAN_STOP_REASONS = [

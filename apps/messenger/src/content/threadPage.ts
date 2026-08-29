@@ -1,22 +1,12 @@
 import {
+  ENCRYPTED_THREAD_PATH,
+  readThreadIdFromPath,
   resolveThreadIdSource,
   type ThreadIdSource,
 } from '../shared/types/thread';
 import { SELECTORS } from './parsing/selectors';
 
 export type { ThreadIdSource };
-
-// A thread is reachable under two origins with different path prefixes, and the
-// <id> segment is the same under both. Stripping the origin and the prefix is
-// therefore all it takes to recognise one conversation across both surfaces.
-const THREAD_PATH_PATTERNS = [
-  /^\/t\/([^/?#]+)/,
-  /^\/messages\/t\/([^/?#]+)/,
-  /^\/e2ee\/t\/([^/?#]+)/,
-  /^\/messages\/e2ee\/t\/([^/?#]+)/,
-];
-
-const ENCRYPTED_PATH_PATTERN = /^(?:\/messages)?\/e2ee\/t\//;
 
 export type ThreadTarget = {
   readonly isThreadPage: boolean;
@@ -33,18 +23,6 @@ const NO_THREAD: ThreadTarget = {
   threadTitle: null,
   isEncryptedThread: false,
 };
-
-function readThreadIdFromPath(pathname: string): string | null {
-  for (const pattern of THREAD_PATH_PATTERNS) {
-    const match = pattern.exec(pathname);
-    const threadId = match?.[1];
-    if (threadId !== undefined && threadId.length > 0) {
-      return decodeURIComponent(threadId);
-    }
-  }
-
-  return null;
-}
 
 export { resolveThreadIdSource };
 
@@ -84,7 +62,7 @@ export function resolveThreadTarget(
     threadId,
     threadIdSource: resolveThreadIdSource(threadId),
     threadTitle,
-    isEncryptedThread: ENCRYPTED_PATH_PATTERN.test(locationLike.pathname),
+    isEncryptedThread: ENCRYPTED_THREAD_PATH.test(locationLike.pathname),
   };
 }
 

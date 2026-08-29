@@ -131,6 +131,45 @@ Messages are recycled out of the DOM as they leave the viewport, which rules out
 reading a final snapshot and confirms the mutation-driven design the core already has.
 `findMessageElements` skips placeholders so a recycled row is never read as a blank.
 
+### The element that scrolls is inside the log, not above it
+
+A saved page has no live layout, so this one had to be measured in an authenticated tab.
+The result contradicts the assumption the plan was written under: the scrolling element
+is a **descendant** of `[role="log"]`, two levels below it, and carries `role="none"`.
+Walking upward from the log finds nothing, which is precisely how automatic scanning came
+to resolve no scroll target and stop on its first step.
+
+It cannot be identified by overflowing content either. The same live log held **97
+descendants** whose `scrollHeight` exceeded their `clientHeight` while computing
+`overflow-y: visible`; those overflow visibly and ignore `scrollBy` entirely. The one
+element that answers is the one that both declares a scrollable overflow and holds
+message rows, and searching the whole 983-element subtree for it costs 0.36ms — far
+below the 1.5s between scroll steps.
+
+Driving it upward confirmed the rest of the design: on reaching the top, Messenger
+prepends history and the offset jumps back down (`scrollHeight` 2122 → 3516 → 5297).
+A stall check on `scrollTop` alone would read that jump as progress lost, which is why
+`hasStalled` measures `scrollHeight - scrollTop` instead.
+
+### One content script sees several conversations
+
+Clicking a conversation in the sidebar is a `pushState` navigation: the document is never
+replaced, so the content script that was loaded for the first conversation keeps running
+for every conversation opened after it. `popstate` does not help — it fires only for the
+back and forward buttons, never for `pushState` — so a script that resolves "the current
+thread" once holds an id that silently becomes wrong.
+
+That is why the canonical thread id is stored together with the id it was resolved for
+and is used only while the URL still names that conversation. Without the pairing, a scan
+of the second conversation writes its messages under the first, the popup reports nothing
+captured for the conversation on screen, and `RECORD_THREAD_SCAN` then records the second
+id as an *alias* of the first — which makes the mix-up permanent for both.
+
+The service worker has the same problem in a different form. A batch carries its thread id
+in the messages themselves, but stopping or interrupting a scan carries no messages, so
+the thread has to come from the session's URL. Falling back to the most recently scanned
+thread, as it first did, attributes one conversation's stop reason to another.
+
 ### There is no absolute timestamp in the DOM
 
 No `title`, no `datetime`, no `<time>` element anywhere in any sample. Timestamps exist
@@ -171,10 +210,7 @@ Not contradicted by the samples, but not confirmed by them either:
   almost certainly need to grow.
 - **System notices.** Unsent messages, member changes and call notices did not appear,
   beyond one `You created this group`.
-- **The scroll container.** A saved page has no computed styles, so the element that
-  actually scrolls could not be identified offline. It has to be found in a live tab.
 - **Thread identity.** The saved URL confirms `/t/<id>` on both surfaces, but alias
   promotion between vanity and numeric ids needs a live session to exercise.
 
-The scroll and storage design is unchanged from the plan; nothing found here
-contradicts it.
+The storage design is unchanged from the plan; nothing found here contradicts it.
