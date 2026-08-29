@@ -118,27 +118,7 @@ export function isStrongerIdentity(
   );
 }
 
-// Two sightings that both carry a Facebook id or url and disagree on it are
-// different posts, however alike their opening lines look. Merging them on a
-// matching fingerprint would lose one of them.
-export function contradictsStoredIdentity(
-  existingPost: CapturedPost,
-  incomingPost: CapturedPost,
-): boolean {
-  if (
-    existingPost.externalId !== null &&
-    incomingPost.externalId !== null &&
-    existingPost.externalId !== incomingPost.externalId
-  ) {
-    return true;
-  }
-
-  return (
-    existingPost.externalUrl !== null &&
-    incomingPost.externalUrl !== null &&
-    existingPost.externalUrl !== incomingPost.externalUrl
-  );
-}
+export { contradictsStoredIdentity } from '@extractor/capture-core/storage';
 
 // An emptied story hashes to the same key as every other emptied story, so
 // storing one would silently overwrite an unrelated post under that key.

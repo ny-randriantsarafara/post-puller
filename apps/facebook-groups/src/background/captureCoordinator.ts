@@ -2,7 +2,6 @@ import {
   clearCollectionPosts,
   clearPosts,
   listCollectionStats,
-  listIdentityKeys,
   upsertPosts,
 } from '../shared/storage/postRepository';
 import type { CaptureMode, CaptureSession, CapturedPost } from '../shared/types';
@@ -22,19 +21,6 @@ import { readCaptureSession, writeCaptureSession } from './sessionStore';
 
 const CONTENT_SCRIPT_UNREACHABLE_MESSAGE =
   'Could not reach the Facebook tab. Refresh it, then start capture again.';
-
-let identityKeys = new Set<string>();
-let identityKeysLoaded = false;
-
-async function ensureIdentityKeysLoaded(): Promise<void> {
-  if (identityKeysLoaded) {
-    return;
-  }
-
-  const keys = await listIdentityKeys();
-  identityKeys = new Set(keys);
-  identityKeysLoaded = true;
-}
 
 async function refreshSessionCounts(session: CaptureSession): Promise<CaptureSession> {
   const collectionStats = await listCollectionStats();
@@ -145,8 +131,6 @@ async function handleStartCapture(
   mode: CaptureMode,
   options: CaptureOptions,
 ): Promise<BackgroundResponse> {
-  await ensureIdentityKeysLoaded();
-
   const pageInfo = await requestPageInfo(tabId);
   if (!pageInfo.ok) {
     return {
@@ -220,8 +204,6 @@ async function handlePostsCaptured(
   requestTabId: number,
   posts: CapturedPost[],
 ): Promise<BackgroundResponse> {
-  await ensureIdentityKeysLoaded();
-
   const session = await readCaptureSession();
   if (session.status !== 'capturing') {
     return {
@@ -239,9 +221,6 @@ async function handlePostsCaptured(
   }
 
   await upsertPosts(posts);
-  for (const post of posts) {
-    identityKeys.add(post.identityKey);
-  }
 
   const refreshedSession = await refreshSessionCounts(session);
   await writeCaptureSession(refreshedSession);
@@ -288,8 +267,6 @@ async function handleCaptureInterrupted(tabId: number): Promise<void> {
 
 async function handleClearData(): Promise<BackgroundResponse> {
   await clearPosts();
-  identityKeys = new Set();
-  identityKeysLoaded = true;
 
   const session = await refreshSessionCounts({
     ...EMPTY_CAPTURE_SESSION,
@@ -305,9 +282,6 @@ async function handleClearData(): Promise<BackgroundResponse> {
 
 async function handleClearGroupData(collectionUrl: string): Promise<BackgroundResponse> {
   await clearCollectionPosts(collectionUrl);
-  await ensureIdentityKeysLoaded();
-  identityKeys = new Set(await listIdentityKeys());
-  identityKeysLoaded = true;
 
   const currentSession = await readCaptureSession();
   const session = await refreshSessionCounts(currentSession);

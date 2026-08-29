@@ -9,6 +9,8 @@
     "./errorMessage": "./src/errorMessage.ts",
     "./identity": "./src/identity/index.ts",
     "./messaging": "./src/messaging/index.ts",
+    "./stats": "./src/stats/index.ts",
+    "./storage": "./src/storage/index.ts",
     "./time": "./src/time/index.ts",
     "./testing/setup": "./src/testing/setup.ts"
   },
