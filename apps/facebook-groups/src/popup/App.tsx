@@ -1,3 +1,4 @@
+import { judgeScanStats } from '@extractor/capture-core/domain';
 import { useCallback, useEffect, useState } from 'react';
 import {
   downloadCollectionExports,
@@ -48,6 +49,28 @@ function getStatusMessage(session: CaptureSession): string | null {
   }
 
   return null;
+}
+
+// Posts the feed recycled before they were read are the difference between a
+// capture that is short because the group is small and one that is short because
+// the scan lost a race. Only the second is worth acting on, so only it is said.
+function getScanReadoutMessage(session: CaptureSession): string | null {
+  const { seenItemCount, unreadItemCount } = session.scanStats;
+  const verdict = judgeScanStats(session.scanStats);
+
+  switch (verdict) {
+    case 'quiet':
+    case 'reading':
+      return null;
+    case 'racing':
+      return `${String(unreadItemCount)} of the ${String(seenItemCount)} posts seen were recycled by the feed before they could be read. Capture is partial until they are seen again.`;
+    case 'unreadable':
+      return `None of the ${String(seenItemCount)} posts seen could be read. That is what a changed layout looks like rather than an empty feed.`;
+    default: {
+      const unhandled: never = verdict;
+      return String(unhandled);
+    }
+  }
 }
 
 function getAutoScrollMessage(session: CaptureSession): string | null {
@@ -208,6 +231,7 @@ export function App() {
 
   const statusMessage = getStatusMessage(session);
   const autoScrollMessage = getAutoScrollMessage(session);
+  const scanReadoutMessage = getScanReadoutMessage(session);
   const isCapturing = session.status === 'capturing';
   const selectedMode = resolveSelectedMode(session, requestedMode);
   const selectedOptions = resolveSelectedOptions(session, requestedOptions);
@@ -255,6 +279,10 @@ export function App() {
 
       {autoScrollMessage !== null && (
         <p className="popup__message">{autoScrollMessage}</p>
+      )}
+
+      {scanReadoutMessage !== null && (
+        <p className="popup__message popup__message--warning">{scanReadoutMessage}</p>
       )}
 
       {statusMessage !== null && (

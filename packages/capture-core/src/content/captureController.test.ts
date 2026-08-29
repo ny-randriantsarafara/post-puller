@@ -91,7 +91,11 @@ function renderRows(count: number): void {
 type AdapterHooks = Partial<
   Pick<
     SiteAdapter<SampleItem, SampleOptions>,
-    'beginScan' | 'shouldKeepScrolling' | 'onScrollingEnded' | 'resolveScrollTarget'
+    | 'beginScan'
+    | 'shouldKeepScrolling'
+    | 'onScrollingEnded'
+    | 'resolveScrollTarget'
+    | 'isCapturableItemRoot'
   >
 >;
 
@@ -107,7 +111,8 @@ function createAdapter(hooks: AdapterHooks): SiteAdapter<SampleItem, SampleOptio
     findRenderedItemRoots: (root) => [...root.querySelectorAll('[data-row]')],
     findContainingItemRoot: (node) =>
       node instanceof Element ? node.closest('[data-row]') : null,
-    isCapturableItemRoot: (element) => element.isConnected,
+    isCapturableItemRoot:
+      hooks.isCapturableItemRoot ?? ((element) => element.isConnected),
     captureItem: (itemRoot, collection, _options, capturedAt) => {
       const rowId = itemRoot.getAttribute('data-row') ?? 'unknown';
 
@@ -256,6 +261,43 @@ describe('createCaptureController automatic scrolling', () => {
     );
 
     expect(capturedBatches.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // The batch that reads nothing sends no items, so this is the only message the
+  // service worker gets from a scan whose rows all vanish before it reads them.
+  it('reports what a batch saw even when it captured none of it', async () => {
+    renderPanel(0);
+    const sentRequests: unknown[] = [];
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage: (request: unknown) => {
+          sentRequests.push(request);
+          return Promise.resolve({});
+        },
+      },
+    });
+
+    await startScan(
+      createAdapter({ isCapturableItemRoot: () => false }),
+      'manual',
+    );
+    renderRows(3);
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+
+    expect(sentRequests).toContainEqual({
+      type: 'ITEMS_SEEN',
+      tabId: 0,
+      stats: { seenItemCount: 3, unreadItemCount: 3 },
+    });
+    expect(
+      sentRequests.filter(
+        (request) =>
+          typeof request === 'object' &&
+          request !== null &&
+          'type' in request &&
+          request.type === 'ITEMS_CAPTURED',
+      ),
+    ).toEqual([]);
   });
 
   it('never asks a manual scan whether to keep scrolling', async () => {

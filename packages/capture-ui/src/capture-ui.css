@@ -118,6 +118,18 @@
   gap: 6px;
 }
 
+.cui-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cui-readout__counts {
+  margin: 0;
+  font-size: 11px;
+  color: #65676b;
+}
+
 .cui-message {
   margin: 0;
   font-size: 12px;

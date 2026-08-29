@@ -140,6 +140,16 @@ async function runScanToCompletion(): Promise<void> {
 
   await expect.poll(readStoredMessageCount, { timeout: 20_000 }).toBe(TOTAL_MESSAGES);
 
+  // The scan's own account of itself, which the popup shows and which is the
+  // only signal a scan that reads nothing produces. Every stored message was
+  // seen at least once, so a scan that stored the conversation cannot report
+  // having seen less of it.
+  const session = await readSession({ type: 'GET_SESSION' });
+  expect(session.scanStats.seenItemCount).toBeGreaterThanOrEqual(TOTAL_MESSAGES);
+  expect(session.scanStats.unreadItemCount).toBeLessThan(
+    session.scanStats.seenItemCount,
+  );
+
   await readSession({ type: 'STOP_CAPTURE' });
 }
 

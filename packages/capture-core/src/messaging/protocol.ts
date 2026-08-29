@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import type { Schema } from '../domain/schema';
+import type { ScanStats } from '../domain/stats';
 import {
   captureModeSchema,
   createCaptureSessionSchema,
+  scanStatsSchema,
   type CaptureMode,
   type CaptureSession,
 } from './session';
@@ -18,6 +20,10 @@ export type BackgroundRequest<TItem, TOptions extends object> =
   | { type: 'CLEAR_DATA' }
   | { type: 'CLEAR_COLLECTION_DATA'; collectionUrl: string }
   | { type: 'ITEMS_CAPTURED'; tabId: number; items: TItem[] }
+  // Sent once per batch, including the batch that read nothing at all: a scan
+  // whose items are all recycled before it reaches them sends no ITEMS_CAPTURED
+  // and would otherwise be indistinguishable from a scan with nothing to read.
+  | { type: 'ITEMS_SEEN'; tabId: number; stats: ScanStats }
   | { type: 'CAPTURE_INTERRUPTED'; tabId: number }
   | { type: 'AUTO_SCROLL_COMPLETED'; tabId: number };
 
@@ -64,6 +70,11 @@ const backgroundRequestEnvelopeSchema = z.discriminatedUnion('type', [
     type: z.literal('ITEMS_CAPTURED'),
     tabId: z.number(),
     items: z.array(z.unknown()),
+  }),
+  z.object({
+    type: z.literal('ITEMS_SEEN'),
+    tabId: z.number(),
+    stats: scanStatsSchema,
   }),
   z.object({ type: z.literal('CAPTURE_INTERRUPTED'), tabId: z.number() }),
   z.object({ type: z.literal('AUTO_SCROLL_COMPLETED'), tabId: z.number() }),
@@ -144,6 +155,12 @@ export function createCaptureProtocol<TItem, TOptions extends object>({
           type: 'ITEMS_CAPTURED',
           tabId: envelope.tabId,
           items: envelope.items.map((item) => itemSchema.parse(item)),
+        };
+      case 'ITEMS_SEEN':
+        return {
+          type: 'ITEMS_SEEN',
+          tabId: envelope.tabId,
+          stats: envelope.stats,
         };
       case 'CAPTURE_INTERRUPTED':
         return { type: 'CAPTURE_INTERRUPTED', tabId: envelope.tabId };

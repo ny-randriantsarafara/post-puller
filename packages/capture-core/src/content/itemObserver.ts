@@ -1,11 +1,15 @@
 import type { CollectionInfo } from '../domain/collection';
 import type { CapturedItemBase } from '../domain/item';
+import type { ScanStats } from '../domain/stats';
 import { toErrorMessage } from '../errorMessage';
 import { DEFAULT_CAPTURE_TIMING, type CaptureTiming } from './captureTiming';
 import type { ExpansionRule, SiteAdapter } from './siteAdapter';
 
 export type ItemObserverCallbacks<TItem> = {
   onItemsCaptured: (items: TItem[]) => void;
+  // Reported per batch, so that items seen and never read are counted where they
+  // are skipped rather than inferred later from a total that does not move.
+  onItemsSeen: (stats: ScanStats) => void;
   onInterrupted: () => void;
 };
 
@@ -259,13 +263,19 @@ export class ItemObserver<
 
     this.adapter.beginBatch?.();
 
+    // Counted here rather than at the call sites of the two skips below, so that
+    // a skip added later is unread by default instead of invisible by default.
+    let unreadItemCount = 0;
+
     for (const element of elements) {
       if (!this.adapter.isCapturableItemRoot(element)) {
+        unreadItemCount += 1;
         continue;
       }
 
       const capturedItem = await this.captureItem(element, collection);
       if (capturedItem === null) {
+        unreadItemCount += 1;
         continue;
       }
 
@@ -292,6 +302,11 @@ export class ItemObserver<
       this.observedItems.set(element, capturedItem);
       capturedItems.push(capturedItem);
     }
+
+    this.callbacks.onItemsSeen({
+      seenItemCount: elements.length,
+      unreadItemCount,
+    });
 
     this.emitCapturedItems(capturedItems);
 

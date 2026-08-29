@@ -1,5 +1,6 @@
 import type { CaptureDomain } from '../domain/captureDomain';
 import type { CapturedItemBase } from '../domain/item';
+import { addScanStats, type ScanStats } from '../domain/stats';
 import { toErrorMessage } from '../errorMessage';
 import { trySendTabRequest } from '../messaging/client';
 import type {
@@ -240,6 +241,35 @@ export function createCaptureCoordinator<
     return { type: 'SUCCESS', session: refreshedSession };
   }
 
+  // Accumulated rather than recounted, because the pages a batch skipped are
+  // gone by the time anything could look at them again. The store is not touched
+  // here: these counts are about the scan, and the stored totals move only when
+  // a batch actually arrives.
+  async function handleItemsSeen(
+    tabId: number,
+    requestTabId: number,
+    stats: ScanStats,
+  ): Promise<BackgroundResponse<TOptions>> {
+    const session = await sessionStore.read();
+    if (session.status !== 'capturing') {
+      return { type: 'SESSION', session };
+    }
+
+    const activeTabId = tabId > 0 ? tabId : requestTabId;
+    if (session.tabId !== null && session.tabId !== activeTabId) {
+      return { type: 'SESSION', session };
+    }
+
+    const countedSession: CaptureSession<TOptions> = {
+      ...session,
+      scanStats: addScanStats(session.scanStats, stats),
+    };
+
+    await sessionStore.write(countedSession);
+
+    return { type: 'SUCCESS', session: countedSession };
+  }
+
   // Auto-scroll reaching the end of the page is progress worth reporting, not a
   // reason to end the session: the user decides when to stop.
   async function handleAutoScrollCompleted(
@@ -298,13 +328,29 @@ export function createCaptureCoordinator<
     return { type: 'SUCCESS', session };
   }
 
-  async function handleBackgroundMessage(
-    request: unknown,
+  // Every handler below reads the session, changes part of it and writes it back.
+  // Two of those interleaved lose whichever change was read first, and they do
+  // interleave: the content script reports a batch without waiting for an answer,
+  // so the counts and the items of one batch arrive as two concurrent messages.
+  // A worker handling one message at a time is slower than it has to be and is
+  // the only version of this that is correct without a per-field merge.
+  let pendingWork: Promise<unknown> = Promise.resolve();
+
+  function queue<TResult>(work: () => Promise<TResult>): Promise<TResult> {
+    const result = pendingWork.then(work, work);
+    // Kept off the chain, so one failed handler does not reject the next.
+    pendingWork = result.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return result;
+  }
+
+  async function dispatch(
+    parsedRequest: BackgroundRequest<TItem, TOptions>,
     sender: chrome.runtime.MessageSender,
   ): Promise<BackgroundResponse<TOptions>> {
-    const parsedRequest: BackgroundRequest<TItem, TOptions> =
-      protocol.parseBackgroundRequest(request);
-
     switch (parsedRequest.type) {
       case 'GET_SESSION': {
         const session = await refreshSessionCounts(await sessionStore.read());
@@ -331,6 +377,14 @@ export function createCaptureCoordinator<
           parsedRequest.items,
         );
       }
+      case 'ITEMS_SEEN': {
+        const senderTabId = sender.tab?.id ?? -1;
+        return handleItemsSeen(
+          senderTabId,
+          parsedRequest.tabId,
+          parsedRequest.stats,
+        );
+      }
       case 'CAPTURE_INTERRUPTED': {
         const senderTabId = sender.tab?.id ?? parsedRequest.tabId;
         await handleCaptureInterrupted(senderTabId);
@@ -351,6 +405,16 @@ export function createCaptureCoordinator<
         };
       }
     }
+  }
+
+  function handleBackgroundMessage(
+    request: unknown,
+    sender: chrome.runtime.MessageSender,
+  ): Promise<BackgroundResponse<TOptions>> {
+    const parsedRequest: BackgroundRequest<TItem, TOptions> =
+      protocol.parseBackgroundRequest(request);
+
+    return queue(() => dispatch(parsedRequest, sender));
   }
 
   // Lifecycle listeners have no caller to return an error to, so failures are

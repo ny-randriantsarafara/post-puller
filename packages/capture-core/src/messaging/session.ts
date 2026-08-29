@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { CollectionInfo } from '../domain/collection';
 import type { Schema } from '../domain/schema';
+import { EMPTY_SCAN_STATS, type ScanStats } from '../domain/stats';
 
 export type CaptureStatus = 'idle' | 'capturing' | 'interrupted';
 
@@ -38,6 +39,10 @@ export type CaptureSession<TOptions extends object> = {
   stoppedAt: string | null;
   interruptedAt: string | null;
   collectionStats: CollectionCaptureStats[];
+  // Reset when a scan starts, because it describes that scan rather than the
+  // store. Without it a scan that reads nothing looks exactly like a scan with
+  // nothing to read.
+  scanStats: ScanStats;
 };
 
 export const captureModeSchema = z.enum(['manual', 'auto']);
@@ -50,6 +55,11 @@ export const collectionInfoSchema = z.object({
 export const publicationWindowSchema = z.object({
   earliest: z.string().nullable(),
   latest: z.string().nullable(),
+});
+
+export const scanStatsSchema = z.object({
+  seenItemCount: z.number(),
+  unreadItemCount: z.number(),
 });
 
 export const collectionCaptureStatsSchema = z.object({
@@ -77,6 +87,7 @@ const sessionFieldsSchema = z.object({
   stoppedAt: z.string().nullable(),
   interruptedAt: z.string().nullable(),
   collectionStats: z.array(collectionCaptureStatsSchema).default([]),
+  scanStats: scanStatsSchema.default(EMPTY_SCAN_STATS),
 });
 
 export function buildEmptyCaptureSession<TOptions extends object>(
@@ -94,6 +105,7 @@ export function buildEmptyCaptureSession<TOptions extends object>(
     stoppedAt: null,
     interruptedAt: null,
     collectionStats: [],
+    scanStats: EMPTY_SCAN_STATS,
   };
 }
 

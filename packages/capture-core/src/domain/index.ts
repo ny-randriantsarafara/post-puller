@@ -9,5 +9,12 @@ export {
 } from './identity';
 export type { CapturedItemBase } from './item';
 export type { Schema } from './schema';
-export type { StatsProjection } from './stats';
+export {
+  addScanStats,
+  EMPTY_SCAN_STATS,
+  judgeScanStats,
+  type ScanStats,
+  type ScanStatsVerdict,
+  type StatsProjection,
+} from './stats';
 export type { StorageConfig } from './storage';

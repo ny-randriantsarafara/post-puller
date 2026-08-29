@@ -73,6 +73,38 @@ describe('createCaptureProtocol', () => {
     ).toThrow();
   });
 
+  it('carries what a batch saw, so a batch that stored nothing still reports', () => {
+    const request = protocol.parseBackgroundRequest({
+      type: 'ITEMS_SEEN',
+      tabId: 7,
+      stats: { seenItemCount: 9, unreadItemCount: 9 },
+    });
+
+    if (request.type !== 'ITEMS_SEEN') {
+      throw new Error('expected an ITEMS_SEEN request');
+    }
+
+    expect(request.stats).toEqual({ seenItemCount: 9, unreadItemCount: 9 });
+  });
+
+  // A session written by an older build has no counts, and discarding it would
+  // lose the running scan rather than the number.
+  it('reads a session stored before the counts existed', () => {
+    const response = protocol.parseBackgroundResponse({
+      type: 'SESSION',
+      session: { ...session, scanStats: undefined },
+    });
+
+    if (response.type !== 'SESSION') {
+      throw new Error('expected a SESSION response');
+    }
+
+    expect(response.session.scanStats).toEqual({
+      seenItemCount: 0,
+      unreadItemCount: 0,
+    });
+  });
+
   it('rejects an unknown request type', () => {
     expect(() => protocol.parseBackgroundRequest({ type: 'NOT_A_REQUEST' })).toThrow();
   });

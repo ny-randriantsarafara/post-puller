@@ -51,6 +51,13 @@ Captured messages stay in IndexedDB after the popup closes. The popup shows the 
 the conversation in the current tab, the count across every conversation, and a warning
 banner for anything that makes an export say less than it appears to.
 
+While a scan runs it also reports what that scan saw against what it managed to read. The
+two numbers differ because Messenger recycles a message row out of the DOM as it scrolls
+away, sometimes before the batch that was going to read it gets there. A scan that reads
+most of what it sees is working normally; one that can read *none* of it has selectors
+that no longer match the page, which without this number is indistinguishable from a
+conversation with nothing left to capture.
+
 ### Scan modes
 
 **Manual scan** only watches the conversation: you scroll.

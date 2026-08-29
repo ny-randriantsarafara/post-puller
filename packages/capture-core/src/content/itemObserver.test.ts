@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CollectionInfo } from '../domain/collection';
+import type { ScanStats } from '../domain/stats';
 import { ItemObserver } from './itemObserver';
 import type { SiteAdapter } from './siteAdapter';
 
@@ -96,11 +97,12 @@ const sampleAdapter: SiteAdapter<SampleItem, SampleOptions> = {
 
 function createObserver(
   onItemsCaptured: (items: SampleItem[]) => void,
+  onItemsSeen: (stats: ScanStats) => void = () => undefined,
 ): ItemObserver<SampleItem, SampleOptions> {
   return new ItemObserver({
     adapter: sampleAdapter,
     defaultOptions: DEFAULT_OPTIONS,
-    callbacks: { onItemsCaptured, onInterrupted: () => undefined },
+    callbacks: { onItemsCaptured, onItemsSeen, onInterrupted: () => undefined },
   });
 }
 
@@ -259,13 +261,65 @@ describe('ItemObserver on a synthetic adapter', () => {
   it('skips a row the adapter refuses and keeps the rest of the batch', async () => {
     renderList(renderRow('1', 'first'), '<div data-row="2"></div>');
     const captured: SampleItem[][] = [];
-    const observer = createObserver((items) => captured.push(items));
+    const seen: ScanStats[] = [];
+    const observer = createObserver(
+      (items) => captured.push(items),
+      (stats) => seen.push(stats),
+    );
 
     observer.start();
     await vi.advanceTimersByTimeAsync(FLUSH_MS);
     observer.stop();
 
     expect(captured.flat().map((item) => item.externalId)).toEqual(['1']);
+    // The refused row is reported rather than dropped in silence, which is the
+    // difference between a short capture and a capture known to be short.
+    expect(seen).toEqual([{ seenItemCount: 2, unreadItemCount: 1 }]);
+  });
+
+  // The batch reads elements, not snapshots, so a site that recycles a row while
+  // the batch is still pending takes it away before it can be read. This is the
+  // race an upward scan runs on every step.
+  it('counts a row the page recycled before the batch reached it', async () => {
+    renderList(renderRow('1', 'first'));
+    const captured: SampleItem[][] = [];
+    const seen: ScanStats[] = [];
+    const observer = createObserver(
+      (items) => captured.push(items),
+      (stats) => seen.push(stats),
+    );
+
+    observer.start();
+    document.querySelector('[data-row="1"] [data-text]')?.remove();
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+    observer.stop();
+
+    expect(captured.flat()).toEqual([]);
+    expect(seen).toEqual([{ seenItemCount: 1, unreadItemCount: 1 }]);
+  });
+
+  // A row read again and found no better is not a row that went unread. Counting
+  // it as one would report a healthy scan as a failing one, since a scan re-reads
+  // every row it scrolls past.
+  it('does not count a row it read and judged no better than before', async () => {
+    renderList(renderRow('1', 'first'));
+    const seen: ScanStats[] = [];
+    const observer = createObserver(
+      () => undefined,
+      (stats) => seen.push(stats),
+    );
+
+    observer.start();
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+
+    document.querySelector('[data-row="1"]')?.setAttribute('data-touched', 'yes');
+    await vi.advanceTimersByTimeAsync(FLUSH_MS);
+    observer.stop();
+
+    expect(seen).toEqual([
+      { seenItemCount: 1, unreadItemCount: 0 },
+      { seenItemCount: 1, unreadItemCount: 0 },
+    ]);
   });
 
   it('interrupts when the page stops being a target mid-scan', async () => {
@@ -284,7 +338,11 @@ describe('ItemObserver on a synthetic adapter', () => {
         },
       },
       defaultOptions: DEFAULT_OPTIONS,
-      callbacks: { onItemsCaptured: () => undefined, onInterrupted },
+      callbacks: {
+        onItemsCaptured: () => undefined,
+        onItemsSeen: () => undefined,
+        onInterrupted,
+      },
     });
 
     observer.start();

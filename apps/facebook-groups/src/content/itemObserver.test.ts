@@ -14,7 +14,11 @@ function createObserver(
   return new ItemObserver({
     adapter: facebookSiteAdapter,
     defaultOptions: DEFAULT_CAPTURE_OPTIONS,
-    callbacks: { onItemsCaptured, onInterrupted: () => undefined },
+    callbacks: {
+      onItemsCaptured,
+      onItemsSeen: () => undefined,
+      onInterrupted: () => undefined,
+    },
   });
 }
 

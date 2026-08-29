@@ -2,6 +2,7 @@ import {
   CaptureOptionsPanel,
   MetricCard,
   ScanModeSelector,
+  ScanReadout,
   StatusBadge,
   type CaptureOptionRow,
   type ScanModeOption,
@@ -268,6 +269,7 @@ export function App() {
       />
 
       <div className="cui-messages">
+        <ScanReadout stats={session.scanStats} itemNoun="messages" />
         {scanMessage !== null && <p className="cui-message">{scanMessage}</p>}
         {session.status === 'interrupted' && (
           <p className="cui-message cui-message--warning">

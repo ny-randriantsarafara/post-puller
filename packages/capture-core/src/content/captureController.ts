@@ -87,6 +87,9 @@ export function createCaptureController<
           endAutoScroll(false);
         }
       },
+      onItemsSeen: (stats) => {
+        notifyBackground({ type: 'ITEMS_SEEN', tabId: 0, stats });
+      },
       onInterrupted: () => {
         isCapturing = false;
         isAutoScrolling = false;
