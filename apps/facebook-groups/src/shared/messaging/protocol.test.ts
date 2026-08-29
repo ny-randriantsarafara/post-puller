@@ -38,7 +38,9 @@ describe('captureSessionSchema', () => {
       name: 'Sample Group',
       url: COLLECTION_URL,
     });
-    expect(session.collectionStats[0]?.postCount).toBe(3);
+    expect(session.collectionStats[0]?.itemCount).toBe(3);
+    expect(session.collectionStats[0]?.incompleteItemCount).toBe(1);
+    expect(session.collectionStats[0]?.childCount).toBe(7);
   });
 
   it('keeps the capture options a legacy session had chosen', () => {

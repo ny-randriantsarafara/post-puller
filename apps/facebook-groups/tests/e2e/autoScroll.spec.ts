@@ -133,7 +133,7 @@ test('scrolls the group by itself and stores every post exactly once', async () 
 
   // The first story lost its node and aged its timestamp mid-run, so its content
   // hash changed. It must still count as one post, not two.
-  expect(sumCollectionStats(session.collectionStats).postCount).toBe(TOTAL_STORIES);
+  expect(sumCollectionStats(session.collectionStats).itemCount).toBe(TOTAL_STORIES);
   expect(session.status).toBe('capturing');
 
   await readSession({ type: 'STOP_CAPTURE' });

@@ -238,7 +238,7 @@ describe('handleBackgroundMessage', () => {
     }
 
     expect(response.session.collectionStats).toHaveLength(2);
-    expect(sumCollectionStats(response.session.collectionStats).postCount).toBe(2);
+    expect(sumCollectionStats(response.session.collectionStats).itemCount).toBe(2);
   });
 
   it('clears one group without removing the others', async () => {

@@ -1,24 +1,19 @@
 import type { CollectionInfo } from '@extractor/capture-core/domain';
+import type {
+  CollectionCaptureStats,
+  PublicationWindow,
+} from '@extractor/capture-core/messaging';
 import type { CapturedPost } from '../types/post';
 
-export type PublicationWindow = {
-  earliest: string | null;
-  latest: string | null;
-};
-
-export type CollectionCaptureStats = {
-  collection: CollectionInfo;
-  postCount: number;
-  incompletePostCount: number;
-  commentCount: number;
-  publicationWindow: PublicationWindow;
-  lastCapturedAt: string;
-};
+export type {
+  CollectionCaptureStats,
+  PublicationWindow,
+} from '@extractor/capture-core/messaging';
 
 export type CollectionStatsTotals = {
-  postCount: number;
-  incompletePostCount: number;
-  commentCount: number;
+  itemCount: number;
+  incompleteItemCount: number;
+  childCount: number;
 };
 
 export function groupPostsByCollectionUrl(
@@ -69,11 +64,11 @@ function buildCollectionCaptureStats(
   collectionUrl: string,
   collectionPosts: CapturedPost[],
 ): CollectionCaptureStats {
-  const commentCount = collectionPosts.reduce(
+  const childCount = collectionPosts.reduce(
     (total, post) => total + post.comments.length,
     0,
   );
-  const incompletePostCount = collectionPosts.filter(
+  const incompleteItemCount = collectionPosts.filter(
     (post) => post.warnings.length > 0,
   ).length;
   const lastCapturedAt = collectionPosts.reduce((latest, post) => {
@@ -86,9 +81,9 @@ function buildCollectionCaptureStats(
 
   return {
     collection: resolveCollectionInfo(collectionUrl, collectionPosts),
-    postCount: collectionPosts.length,
-    incompletePostCount,
-    commentCount,
+    itemCount: collectionPosts.length,
+    incompleteItemCount,
+    childCount,
     publicationWindow: buildPublicationWindow(collectionPosts),
     lastCapturedAt,
   };
@@ -109,15 +104,15 @@ export function sumCollectionStats(
 ): CollectionStatsTotals {
   return collectionStats.reduce(
     (totals, collectionStat) => ({
-      postCount: totals.postCount + collectionStat.postCount,
-      incompletePostCount:
-        totals.incompletePostCount + collectionStat.incompletePostCount,
-      commentCount: totals.commentCount + collectionStat.commentCount,
+      itemCount: totals.itemCount + collectionStat.itemCount,
+      incompleteItemCount:
+        totals.incompleteItemCount + collectionStat.incompleteItemCount,
+      childCount: totals.childCount + collectionStat.childCount,
     }),
     {
-      postCount: 0,
-      incompletePostCount: 0,
-      commentCount: 0,
+      itemCount: 0,
+      incompleteItemCount: 0,
+      childCount: 0,
     },
   );
 }

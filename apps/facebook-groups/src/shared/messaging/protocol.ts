@@ -1,4 +1,13 @@
+import {
+  createCaptureProtocol,
+  type BackgroundRequest as CoreBackgroundRequest,
+  type BackgroundResponse as CoreBackgroundResponse,
+  type ContentRequest as CoreContentRequest,
+  type ContentResponse as CoreContentResponse,
+} from '@extractor/capture-core/messaging';
 import { z } from 'zod';
+import type { CaptureOptions } from '../types/captureOptions';
+import type { CapturedPost } from '../types/post';
 import { REACTION_TYPES } from '../types/reactions';
 import { COMMENT_WARNINGS, POST_WARNINGS } from '../types/warnings';
 
@@ -116,8 +125,6 @@ export const capturedPostSchema = z.preprocess(
   capturedPostFieldsSchema,
 );
 
-export const captureModeSchema = z.enum(['manual', 'auto']);
-
 export const captureOptionsSchema = z
   .object({
     expandPostText: z.boolean().default(true),
@@ -164,19 +171,27 @@ function migrateLegacyCollection(record: Record<string, unknown>): Record<string
   };
 }
 
+// Stats rows counted posts and comments by name before the session shape became
+// generic over captured items.
 function migrateLegacyCollectionStats(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) {
     return value;
   }
 
   const record = value as Record<string, unknown>;
-  if (record['collection'] !== undefined) {
+  if (record['itemCount'] !== undefined) {
     return value;
   }
 
-  const { group, ...rest } = record;
+  const { group, postCount, incompletePostCount, commentCount, ...rest } = record;
 
-  return { ...rest, collection: group };
+  return {
+    ...rest,
+    collection: record['collection'] ?? group,
+    itemCount: postCount ?? 0,
+    incompleteItemCount: incompletePostCount ?? 0,
+    childCount: commentCount ?? 0,
+  };
 }
 
 function migrateLegacySession(value: unknown): unknown {
@@ -184,121 +199,33 @@ function migrateLegacySession(value: unknown): unknown {
     return value;
   }
 
-  return migrateLegacyCollection(migrateLegacyOptions(value as Record<string, unknown>));
+  const migrated = migrateLegacyCollection(
+    migrateLegacyOptions(value as Record<string, unknown>),
+  );
+  const collectionStats = migrated['collectionStats'];
+
+  return {
+    ...migrated,
+    collectionStats: Array.isArray(collectionStats)
+      ? collectionStats.map(migrateLegacyCollectionStats)
+      : collectionStats,
+  };
 }
 
-const publicationWindowSchema = z.object({
-  earliest: z.string().nullable(),
-  latest: z.string().nullable(),
+const protocol = createCaptureProtocol<CapturedPost, CaptureOptions>({
+  itemSchema: capturedPostSchema,
+  optionsSchema: captureOptionsSchema,
+  migrateSession: migrateLegacySession,
 });
 
-export const collectionCaptureStatsSchema = z.object({
-  collection: collectionInfoSchema,
-  postCount: z.number(),
-  incompletePostCount: z.number(),
-  commentCount: z.number(),
-  publicationWindow: publicationWindowSchema,
-  lastCapturedAt: z.string(),
-});
+export const captureSessionSchema = protocol.sessionSchema;
 
-const captureSessionFieldsSchema = z.object({
-  status: z.enum(['idle', 'capturing', 'interrupted']),
-  mode: captureModeSchema.default('manual'),
-  options: captureOptionsSchema,
-  autoScrollCompletedAt: z.string().nullable().default(null),
-  tabId: z.number().nullable(),
-  collectionUrl: z.string().nullable(),
-  collectionName: z.string().nullable(),
-  startedAt: z.string().nullable(),
-  stoppedAt: z.string().nullable(),
-  interruptedAt: z.string().nullable(),
-  collectionStats: z.array(collectionCaptureStatsSchema).default([]),
-});
+export type BackgroundRequest = CoreBackgroundRequest<CapturedPost, CaptureOptions>;
+export type BackgroundResponse = CoreBackgroundResponse<CaptureOptions>;
+export type ContentRequest = CoreContentRequest<CaptureOptions>;
+export type ContentResponse = CoreContentResponse;
 
-export const captureSessionSchema = z.preprocess(
-  migrateLegacySession,
-  captureSessionFieldsSchema,
-);
-
-export const backgroundRequestSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('GET_SESSION') }),
-  z.object({
-    type: z.literal('START_CAPTURE'),
-    tabId: z.number(),
-    mode: captureModeSchema,
-    options: captureOptionsSchema,
-  }),
-  z.object({ type: z.literal('STOP_CAPTURE') }),
-  z.object({ type: z.literal('CLEAR_DATA') }),
-  z.object({ type: z.literal('CLEAR_COLLECTION_DATA'), collectionUrl: z.string() }),
-  z.object({
-    type: z.literal('POSTS_CAPTURED'),
-    tabId: z.number(),
-    posts: z.array(capturedPostSchema),
-  }),
-  z.object({ type: z.literal('CAPTURE_INTERRUPTED'), tabId: z.number() }),
-  z.object({ type: z.literal('AUTO_SCROLL_COMPLETED'), tabId: z.number() }),
-]);
-
-export const backgroundResponseSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('SESSION'),
-    session: captureSessionSchema,
-  }),
-  z.object({
-    type: z.literal('ERROR'),
-    message: z.string(),
-  }),
-  z.object({
-    type: z.literal('SUCCESS'),
-    session: captureSessionSchema,
-  }),
-]);
-
-export const contentRequestSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('BEGIN_CAPTURE'),
-    mode: captureModeSchema,
-    options: captureOptionsSchema,
-  }),
-  z.object({ type: z.literal('END_CAPTURE') }),
-  z.object({ type: z.literal('GET_PAGE_INFO') }),
-]);
-
-export const contentResponseSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('PAGE_INFO'),
-    isTargetPage: z.boolean(),
-    collectionName: z.string().nullable(),
-    collectionUrl: z.string().nullable(),
-  }),
-  z.object({
-    type: z.literal('CAPTURE_STATE'),
-    isCapturing: z.boolean(),
-  }),
-  z.object({
-    type: z.literal('ERROR'),
-    message: z.string(),
-  }),
-]);
-
-export type BackgroundRequest = z.infer<typeof backgroundRequestSchema>;
-export type BackgroundResponse = z.infer<typeof backgroundResponseSchema>;
-export type ContentRequest = z.infer<typeof contentRequestSchema>;
-export type ContentResponse = z.infer<typeof contentResponseSchema>;
-
-export function parseBackgroundRequest(value: unknown): BackgroundRequest {
-  return backgroundRequestSchema.parse(value);
-}
-
-export function parseBackgroundResponse(value: unknown): BackgroundResponse {
-  return backgroundResponseSchema.parse(value);
-}
-
-export function parseContentRequest(value: unknown): ContentRequest {
-  return contentRequestSchema.parse(value);
-}
-
-export function parseContentResponse(value: unknown): ContentResponse {
-  return contentResponseSchema.parse(value);
-}
+export const parseBackgroundRequest = protocol.parseBackgroundRequest;
+export const parseBackgroundResponse = protocol.parseBackgroundResponse;
+export const parseContentRequest = protocol.parseContentRequest;
+export const parseContentResponse = protocol.parseContentResponse;

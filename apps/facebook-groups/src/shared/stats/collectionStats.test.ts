@@ -119,9 +119,9 @@ describe('collectionStats', () => {
 
     expect(collectionStats).toHaveLength(2);
     expect(collectionStats[0]?.collection.name).toBe('Group B');
-    expect(collectionStats[1]?.postCount).toBe(2);
-    expect(collectionStats[1]?.incompletePostCount).toBe(1);
-    expect(collectionStats[1]?.commentCount).toBe(2);
+    expect(collectionStats[1]?.itemCount).toBe(2);
+    expect(collectionStats[1]?.incompleteItemCount).toBe(1);
+    expect(collectionStats[1]?.childCount).toBe(2);
   });
 
   it('sums totals across groups', () => {
@@ -133,9 +133,9 @@ describe('collectionStats', () => {
     ]);
 
     expect(sumCollectionStats(collectionStats)).toEqual({
-      postCount: 2,
-      incompletePostCount: 1,
-      commentCount: 2,
+      itemCount: 2,
+      incompleteItemCount: 1,
+      childCount: 2,
     });
   });
 
@@ -144,7 +144,7 @@ describe('collectionStats', () => {
       createSamplePost('https://www.facebook.com/groups/a', 'Group A'),
     ]);
 
-    expect(findCollectionStats(collectionStats, 'https://www.facebook.com/groups/a')?.postCount).toBe(1);
+    expect(findCollectionStats(collectionStats, 'https://www.facebook.com/groups/a')?.itemCount).toBe(1);
     expect(findCollectionStats(collectionStats, 'https://www.facebook.com/groups/missing')).toBeNull();
   });
 

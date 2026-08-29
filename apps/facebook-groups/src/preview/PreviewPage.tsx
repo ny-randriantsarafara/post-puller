@@ -160,7 +160,7 @@ export function PreviewPage() {
               <article className="preview__summary-card" key={collectionStat.collection.url}>
                 <h3 className="preview__summary-name">{formatCollectionLabel(collectionStat.collection)}</h3>
                 <p className="preview__summary-meta">
-                  {collectionStat.postCount} posts · {collectionStat.incompletePostCount} incomplete ·{' '}
+                  {collectionStat.itemCount} posts · {collectionStat.incompleteItemCount} incomplete ·{' '}
                   {formatPublicationWindow(collectionStat.publicationWindow)}
                 </p>
               </article>

@@ -34,9 +34,9 @@ function ensureFeedObserver(): FeedObserver {
   feedObserver = new FeedObserver({
     onPostsCaptured: (posts: CapturedPost[]) => {
       notifyBackground({
-        type: 'POSTS_CAPTURED',
+        type: 'ITEMS_CAPTURED',
         tabId: 0,
-        posts,
+        items: posts,
       });
     },
     onInterrupted: () => {

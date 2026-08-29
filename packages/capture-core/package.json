@@ -8,6 +8,7 @@
     "./result": "./src/result.ts",
     "./errorMessage": "./src/errorMessage.ts",
     "./identity": "./src/identity/index.ts",
+    "./messaging": "./src/messaging/index.ts",
     "./time": "./src/time/index.ts",
     "./testing/setup": "./src/testing/setup.ts"
   },

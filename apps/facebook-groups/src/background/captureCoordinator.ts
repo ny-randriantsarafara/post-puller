@@ -5,7 +5,7 @@ import {
   listIdentityKeys,
   upsertPosts,
 } from '../shared/storage/postRepository';
-import type { CaptureMode, CaptureSession } from '../shared/types';
+import type { CaptureMode, CaptureSession, CapturedPost } from '../shared/types';
 import type { CaptureOptions } from '../shared/types/captureOptions';
 import { EMPTY_CAPTURE_SESSION } from '../shared/types';
 import {
@@ -218,7 +218,7 @@ async function handleStopCapture(): Promise<BackgroundResponse> {
 async function handlePostsCaptured(
   tabId: number,
   requestTabId: number,
-  posts: import('../shared/types').CapturedPost[],
+  posts: CapturedPost[],
 ): Promise<BackgroundResponse> {
   await ensureIdentityKeysLoaded();
 
@@ -347,9 +347,9 @@ export async function handleBackgroundMessage(
       return handleClearData();
     case 'CLEAR_COLLECTION_DATA':
       return handleClearGroupData(parsedRequest.collectionUrl);
-    case 'POSTS_CAPTURED': {
+    case 'ITEMS_CAPTURED': {
       const senderTabId = sender.tab?.id ?? -1;
-      return handlePostsCaptured(senderTabId, parsedRequest.tabId, parsedRequest.posts);
+      return handlePostsCaptured(senderTabId, parsedRequest.tabId, parsedRequest.items);
     }
     case 'CAPTURE_INTERRUPTED': {
       const senderTabId = sender.tab?.id ?? parsedRequest.tabId;
