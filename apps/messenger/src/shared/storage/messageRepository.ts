@@ -1,13 +1,20 @@
+import { createSearchMatcher } from '@extractor/capture-core/search';
 import {
+  collectDistinctIndexKeys,
   collectIndexPage,
+  collectSelectedIndexPage,
   createItemRepository,
+  deleteIndexRange,
   requestValue,
+  type ItemFilter,
 } from '@extractor/capture-core/storage';
 import {
   ALIAS_INDEX,
   MESSAGE_STORE_NAME,
+  THREAD_INDEX,
   THREAD_SORT_INDEX,
   THREAD_STORE_NAME,
+  WARNING_INDEX,
   messengerDomain,
 } from '../domain';
 import { capturedThreadSchema } from '../messaging/protocol';
@@ -31,6 +38,16 @@ export type MessagePage = {
   total: number;
   offset: number;
   limit: number;
+};
+
+// A filtered read knows whether more messages follow, not how many matched:
+// counting every match in a conversation of 100 000 messages means walking all
+// of it to show fifty.
+export type MessageMatchPage = {
+  messages: CapturedMessage[];
+  offset: number;
+  limit: number;
+  hasMore: boolean;
 };
 
 export type ThreadScanSummary = {
@@ -78,6 +95,37 @@ function parseMessages(values: unknown[]): CapturedMessage[] {
   });
 }
 
+// Everything the sort index cannot answer about a message, applied while the
+// thread is walked in date order. Returning null drops the message from the page
+// without giving up the order it was being read in.
+function createMessageSelector(
+  filter: ItemFilter,
+): (value: unknown) => CapturedMessage | null {
+  const matchesText = createSearchMatcher(filter.text ?? '');
+
+  return (value) => {
+    const parsed = messengerDomain.itemSchema.safeParse(value);
+    if (!parsed.success) {
+      return null;
+    }
+
+    const message = parsed.data;
+
+    if (
+      filter.warning !== null &&
+      !messengerDomain.projection.readWarnings(message).includes(filter.warning)
+    ) {
+      return null;
+    }
+
+    if (!matchesText(messengerDomain.projection.readSearchableText(message))) {
+      return null;
+    }
+
+    return message;
+  };
+}
+
 // A thread reached under a stronger id than the one it was stored under is the
 // same conversation, so its messages move to the stronger key rather than being
 // captured a second time under it.
@@ -113,12 +161,45 @@ export const messageRepository = {
   listAllMessages: repository.listAllItems,
   listCollectionStats: repository.listCollectionStats,
   clearMessages: repository.clearItems,
-  clearThreadMessages: repository.clearCollectionItems,
 
   clearThreads: async (): Promise<void> => {
     await repository.write([THREAD_STORE_NAME], (stores) =>
       requestValue(stores.get(THREAD_STORE_NAME).clear()),
     );
+  },
+
+  // One conversation and its record, in one transaction. Deleted by thread id
+  // rather than by collection url, because a thread reached under two handles
+  // has messages stored against whichever url was on screen at the time and only
+  // the canonical thread id covers all of them.
+  deleteThread: async (threadId: string): Promise<void> => {
+    await repository.write([MESSAGE_STORE_NAME, THREAD_STORE_NAME], async (stores) => {
+      await deleteIndexRange(
+        stores.get(MESSAGE_STORE_NAME).index(THREAD_INDEX),
+        IDBKeyRange.only(threadId),
+      );
+      await requestValue(stores.get(THREAD_STORE_NAME).delete(threadId));
+    });
+  },
+
+  // How many messages carry each warning code, counted by the warning index
+  // without deserialising a record. Store-wide rather than per conversation: a
+  // field the parser stopped reading stops being read in every thread at once.
+  countMessagesByWarning: async (): Promise<ReadonlyMap<string, number>> => {
+    return repository.read([MESSAGE_STORE_NAME], async (stores) => {
+      const index = stores.get(MESSAGE_STORE_NAME).index(WARNING_INDEX);
+      const warningCodes = await collectDistinctIndexKeys(index);
+      const countsByWarning = new Map<string, number>();
+
+      for (const warningCode of warningCodes) {
+        countsByWarning.set(
+          warningCode,
+          await requestValue(index.count(IDBKeyRange.only(warningCode))),
+        );
+      }
+
+      return countsByWarning;
+    });
   },
 
   listThreadMessagesPage: async (
@@ -138,6 +219,48 @@ export const messageRepository = {
 
       return { messages: parseMessages(values), total, offset, limit };
     });
+  },
+
+  // The same page of a conversation, narrowed by a warning code or a substring.
+  // Both are tested against the messages as the thread is walked in date order,
+  // because neither can be asked of an index that is already ordering by date.
+  findThreadMessagesPage: async (
+    threadId: string,
+    filter: ItemFilter,
+    offset: number,
+    limit: number,
+  ): Promise<MessageMatchPage> => {
+    const page = await repository.read([MESSAGE_STORE_NAME], (stores) =>
+      collectSelectedIndexPage(
+        stores.get(MESSAGE_STORE_NAME).index(THREAD_SORT_INDEX),
+        threadRange(threadId),
+        offset,
+        limit,
+        'next',
+        createMessageSelector(filter),
+      ),
+    );
+
+    return { messages: page.selected, offset, limit, hasMore: page.hasMore };
+  },
+
+  // How many messages precede a day in the thread, which is the offset a reader
+  // has to page to in order to land on it. A conversation is read oldest first,
+  // so the messages ahead of a day are the ones sent before it started. A UTC
+  // day, like every instant in the store; a reader hours away from UTC lands
+  // hours into the day they asked for, which the page they land on absorbs.
+  countThreadMessagesBeforeDay: async (
+    threadId: string,
+    isoDay: string,
+  ): Promise<number> => {
+    return repository.read([MESSAGE_STORE_NAME], (stores) =>
+      requestValue(
+        stores
+          .get(MESSAGE_STORE_NAME)
+          .index(THREAD_SORT_INDEX)
+          .count(IDBKeyRange.bound([threadId, ''], [threadId, isoDay], false, true)),
+      ),
+    );
   },
 
   countUnresolvedTimestamps: async (threadId: string): Promise<number> => {

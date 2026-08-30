@@ -3,13 +3,16 @@ import {
   clearCollectionPosts,
   clearPosts,
   countPosts,
+  countPostsBeforeDay,
+  countPostsByWarning,
+  findPostsPage,
   isBetterParse,
   listAllPosts,
   listCollectionStats,
   listPostsPage,
   upsertPosts,
 } from './postRepository';
-import type { CapturedPost } from '../types';
+import { buildPostSortKey, type CapturedPost } from '../types';
 
 function createSamplePost(index: number, warnings: CapturedPost['warnings'] = []): CapturedPost {
   const identity = String(index);
@@ -29,6 +32,7 @@ function createSamplePost(index: number, warnings: CapturedPost['warnings'] = []
     text: `Post ${identity}`,
     displayedDate: '1 hour ago',
     publishedAt: capturedAt,
+    sortKey: buildPostSortKey(capturedAt, capturedAt),
     reactionCount: 1,
     reactionBreakdown: {},
     commentCount: null,
@@ -38,6 +42,18 @@ function createSamplePost(index: number, warnings: CapturedPost['warnings'] = []
     capturedAt,
     updatedAt: capturedAt,
     warnings,
+  };
+}
+
+// Published on a given day, captured on another, which is the case the two
+// orders disagree about.
+function createPostPublishedOn(index: number, publishedAt: string | null): CapturedPost {
+  const post = createSamplePost(index);
+
+  return {
+    ...post,
+    publishedAt,
+    sortKey: buildPostSortKey(publishedAt, post.capturedAt),
   };
 }
 
@@ -303,6 +319,7 @@ describe('postRepository', () => {
     await upsertPosts([sampleGroupPost, otherGroupPost]);
 
     const filteredPage = await listPostsPage(
+      'newestCapture',
       0,
       20,
       'https://www.facebook.com/groups/sample-group',
@@ -334,5 +351,137 @@ describe('postRepository', () => {
     expect(await countPosts()).toBe(1);
     const remainingPosts = await listAllPosts();
     expect(remainingPosts[0]?.collection.name).toBe('Other Group');
+  });
+
+  // Captured in one order and published in another, which is the whole reason
+  // publication order exists: post 1 was captured first and published last.
+  async function storeThreePublishedDays(): Promise<void> {
+    await clearPosts();
+
+    await upsertPosts([
+      createPostPublishedOn(1, '2026-03-03T09:00:00.000Z'),
+      createPostPublishedOn(2, '2026-03-02T09:00:00.000Z'),
+      createPostPublishedOn(3, '2026-03-01T09:00:00.000Z'),
+    ]);
+  }
+
+  it('reads a group newest published first', async () => {
+    await storeThreePublishedDays();
+
+    const page = await listPostsPage('newestPublication', 0, 20);
+
+    expect(page.posts.map((post) => post.publishedAt)).toEqual([
+      '2026-03-03T09:00:00.000Z',
+      '2026-03-02T09:00:00.000Z',
+      '2026-03-01T09:00:00.000Z',
+    ]);
+  });
+
+  it('reads a group oldest published first', async () => {
+    await storeThreePublishedDays();
+
+    const page = await listPostsPage('oldestPublication', 0, 20);
+
+    expect(page.posts.map((post) => post.publishedAt)).toEqual([
+      '2026-03-01T09:00:00.000Z',
+      '2026-03-02T09:00:00.000Z',
+      '2026-03-03T09:00:00.000Z',
+    ]);
+  });
+
+  // A post whose date never parsed still has to be reachable, and it belongs at
+  // the end of a newest-first read rather than at the head of every page.
+  it('keeps an undated post enumerable, after the dated ones', async () => {
+    await storeThreePublishedDays();
+    await upsertPosts([createPostPublishedOn(4, null)]);
+
+    const page = await listPostsPage('newestPublication', 0, 20);
+
+    expect(page.total).toBe(4);
+    expect(page.posts.map((post) => post.publishedAt)).toEqual([
+      '2026-03-03T09:00:00.000Z',
+      '2026-03-02T09:00:00.000Z',
+      '2026-03-01T09:00:00.000Z',
+      null,
+    ]);
+  });
+
+  it('counts the posts a newest-first read reaches before a day', async () => {
+    await storeThreePublishedDays();
+
+    expect(await countPostsBeforeDay('newestPublication', '2026-03-02')).toBe(1);
+  });
+
+  it('counts the posts an oldest-first read reaches before a day', async () => {
+    await storeThreePublishedDays();
+
+    expect(await countPostsBeforeDay('oldestPublication', '2026-03-02')).toBe(1);
+  });
+
+  it('finds posts by a substring of a comment', async () => {
+    await clearPosts();
+    await upsertPosts([
+      {
+        ...createSamplePost(1),
+        comments: [
+          {
+            commentId: 'c1',
+            parentCommentId: null,
+            depth: 0,
+            author: { kind: 'named', name: 'Commenter', profileUrl: null },
+            text: 'I can help with the réunion',
+            displayedDate: '1 hour ago',
+            publishedAt: null,
+            reactionCount: null,
+            reactionBreakdown: {},
+            warnings: [],
+          },
+        ],
+      },
+      createSamplePost(2),
+    ]);
+
+    const page = await findPostsPage(
+      'newestPublication',
+      { warning: null, text: 'reunion' },
+      0,
+      20,
+    );
+
+    expect(page.posts.map((post) => post.externalId)).toEqual(['1']);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it('counts the stored posts under each warning code', async () => {
+    await clearPosts();
+    await upsertPosts([
+      createSamplePost(1, ['MISSING_AUTHOR']),
+      createSamplePost(2, ['MISSING_AUTHOR', 'MISSING_DATE']),
+      createSamplePost(3),
+    ]);
+
+    expect(await countPostsByWarning()).toEqual(
+      new Map([
+        ['MISSING_AUTHOR', 2],
+        ['MISSING_DATE', 1],
+      ]),
+    );
+  });
+
+  it('finds only the posts carrying a warning code', async () => {
+    await clearPosts();
+    await upsertPosts([
+      createSamplePost(1, ['MISSING_AUTHOR']),
+      createSamplePost(2),
+    ]);
+
+    const page = await findPostsPage(
+      'newestPublication',
+      { warning: 'MISSING_AUTHOR', text: null },
+      0,
+      20,
+    );
+
+    expect(page.posts.map((post) => post.externalId)).toEqual(['1']);
   });
 });

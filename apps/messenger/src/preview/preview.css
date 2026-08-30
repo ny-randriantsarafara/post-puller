@@ -50,6 +50,15 @@ body {
   color: #65676b;
 }
 
+.preview__empty {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  color: #65676b;
+}
+
 .preview__messages {
   margin: 0;
   padding: 0;

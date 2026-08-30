@@ -190,6 +190,140 @@ describe('messageRepository paging', () => {
   });
 });
 
+describe('messageRepository search', () => {
+  it('finds the messages containing a substring, in date order', async () => {
+    await messageRepository.upsertMessages([
+      createMessage(1, { text: 'On se voit à la réunion ?' }),
+      createMessage(2, { text: 'Rien à signaler' }),
+      createMessage(3, { text: 'La reunion est reportée' }),
+    ]);
+
+    const page = await messageRepository.findThreadMessagesPage(
+      THREAD_ID,
+      { warning: null, text: 'reunion' },
+      0,
+      10,
+    );
+
+    expect(page.messages.map((message) => message.text)).toEqual([
+      'On se voit à la réunion ?',
+      'La reunion est reportée',
+    ]);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it('finds a message by the name of its sender', async () => {
+    await messageRepository.upsertMessages([
+      createMessage(1, { sender: { kind: 'other', name: 'Camille Roy' } }),
+      createMessage(2, { sender: { kind: 'self' } }),
+    ]);
+
+    const page = await messageRepository.findThreadMessagesPage(
+      THREAD_ID,
+      { warning: null, text: 'camille' },
+      0,
+      10,
+    );
+
+    expect(page.messages).toHaveLength(1);
+    expect(page.messages[0]?.messageId).toBe('mid.$message1');
+  });
+
+  it('reports that more matches follow without counting them', async () => {
+    await messageRepository.upsertMessages([
+      createMessage(1),
+      createMessage(2),
+      createMessage(3),
+    ]);
+
+    const page = await messageRepository.findThreadMessagesPage(
+      THREAD_ID,
+      { warning: null, text: 'Message' },
+      0,
+      2,
+    );
+
+    expect(page.messages).toHaveLength(2);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it('finds only the messages carrying a warning code', async () => {
+    await messageRepository.upsertMessages([
+      createMessage(1),
+      createUnresolvedMessage(2),
+    ]);
+
+    const page = await messageRepository.findThreadMessagesPage(
+      THREAD_ID,
+      { warning: 'UNRESOLVED_TIMESTAMP', text: null },
+      0,
+      10,
+    );
+
+    expect(page.messages).toHaveLength(1);
+    expect(page.messages[0]?.sentAt).toBeNull();
+  });
+
+  it('counts the stored messages under each warning code', async () => {
+    await messageRepository.upsertMessages([
+      createMessage(1),
+      createUnresolvedMessage(2),
+      createUnresolvedMessage(3),
+    ]);
+
+    expect(await messageRepository.countMessagesByWarning()).toEqual(
+      new Map([['UNRESOLVED_TIMESTAMP', 2]]),
+    );
+  });
+
+  // A conversation is read oldest first, so the messages ahead of a day are the
+  // ones sent before it started. Messages 1 to 3 are sent on the 19th.
+  it('counts the messages a thread holds before a day', async () => {
+    await messageRepository.upsertMessages([
+      createMessage(1),
+      createMessage(2),
+      createMessage(3),
+    ]);
+
+    expect(
+      await messageRepository.countThreadMessagesBeforeDay(THREAD_ID, '2026-08-19'),
+    ).toBe(0);
+    expect(
+      await messageRepository.countThreadMessagesBeforeDay(THREAD_ID, '2026-08-20'),
+    ).toBe(3);
+  });
+});
+
+describe('messageRepository deletion', () => {
+  it('deletes one conversation and its record, leaving the other stored', async () => {
+    await messageRepository.upsertMessages([
+      createMessage(1),
+      createMessage(2, {
+        threadId: 'other-thread',
+        identityKey: 'msg:mid.$other',
+        externalId: 'mid.$other',
+        messageId: 'mid.$other',
+      }),
+    ]);
+    await messageRepository.recordThreadScan({
+      threadId: THREAD_ID,
+      threadIdSource: 'numeric',
+      aliases: [],
+      title: 'Alex Moreau',
+      isEncryptedThread: false,
+      stopReason: 'reachedStart',
+      scannedAt: '2026-08-29T09:30:00.000Z',
+    });
+
+    await messageRepository.deleteThread(THREAD_ID);
+
+    expect(await messageRepository.countMessages()).toBe(1);
+    expect(await messageRepository.listThreads()).toEqual([]);
+    const [remaining] = await messageRepository.listAllMessages();
+    expect(remaining?.threadId).toBe('other-thread');
+  });
+});
+
 describe('messageRepository thread records', () => {
   it('reconciles the message count from the store', async () => {
     await messageRepository.upsertMessages([createMessage(1), createMessage(2)]);

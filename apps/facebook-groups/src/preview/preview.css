@@ -1,3 +1,5 @@
+@import '@extractor/capture-ui/capture-ui.css';
+
 :root {
   color: #1c1e21;
   background: #f0f2f5;
@@ -69,6 +71,13 @@ body {
   margin: 0;
   font-size: 12px;
   color: #65676b;
+}
+
+.preview__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
 }
 
 .preview__filter {

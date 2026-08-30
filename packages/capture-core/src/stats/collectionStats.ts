@@ -1,6 +1,6 @@
 import type { CollectionInfo } from '../domain/collection';
 import type { CapturedItemBase } from '../domain/item';
-import type { StatsProjection } from '../domain/stats';
+import { isIncompleteItem, type ItemProjection } from '../domain/projection';
 import type {
   CollectionCaptureStats,
   PublicationWindow,
@@ -27,7 +27,7 @@ export function groupItemsByCollectionUrl<TItem extends CapturedItemBase>(
 
 export function buildPublicationWindow<TItem extends CapturedItemBase>(
   items: TItem[],
-  projection: StatsProjection<TItem>,
+  projection: ItemProjection<TItem>,
 ): PublicationWindow {
   const publishedDates = items
     .map((item) => projection.readPublishedAt(item))
@@ -62,14 +62,14 @@ function resolveCollectionInfo(
 function buildCollectionCaptureStats<TItem extends CapturedItemBase>(
   collectionUrl: string,
   collectionItems: TItem[],
-  projection: StatsProjection<TItem>,
+  projection: ItemProjection<TItem>,
 ): CollectionCaptureStats {
   const childCount = collectionItems.reduce(
     (total, item) => total + projection.countChildren(item),
     0,
   );
   const incompleteItemCount = collectionItems.filter((item) =>
-    projection.isIncomplete(item),
+    isIncompleteItem(projection, item),
   ).length;
   const lastCapturedAt = collectionItems.reduce((latest, item) => {
     if (item.capturedAt > latest) {
@@ -91,7 +91,7 @@ function buildCollectionCaptureStats<TItem extends CapturedItemBase>(
 
 export function buildCollectionStats<TItem extends CapturedItemBase>(
   items: TItem[],
-  projection: StatsProjection<TItem>,
+  projection: ItemProjection<TItem>,
 ): CollectionCaptureStats[] {
   const itemsByCollectionUrl = groupItemsByCollectionUrl(items);
 
@@ -118,9 +118,10 @@ export type CollectionStatsDelta = {
 export function buildCollectionStatsDelta<TItem extends CapturedItemBase>(
   existingItem: TItem | null,
   writtenItem: TItem,
-  projection: StatsProjection<TItem>,
+  projection: ItemProjection<TItem>,
 ): CollectionStatsDelta {
-  const wasIncomplete = existingItem !== null && projection.isIncomplete(existingItem);
+  const wasIncomplete =
+    existingItem !== null && isIncompleteItem(projection, existingItem);
   const previousChildCount =
     existingItem === null ? 0 : projection.countChildren(existingItem);
 
@@ -128,7 +129,7 @@ export function buildCollectionStatsDelta<TItem extends CapturedItemBase>(
     collection: writtenItem.collection,
     itemCount: existingItem === null ? 1 : 0,
     incompleteItemCount:
-      Number(projection.isIncomplete(writtenItem)) - Number(wasIncomplete),
+      Number(isIncompleteItem(projection, writtenItem)) - Number(wasIncomplete),
     childCount: projection.countChildren(writtenItem) - previousChildCount,
     publishedAt: projection.readPublishedAt(writtenItem),
     capturedAt: writtenItem.capturedAt,

@@ -8,6 +8,7 @@ export {
   type IdentitySource,
 } from './identity';
 export type { CapturedItemBase } from './item';
+export { isIncompleteItem, type ItemProjection } from './projection';
 export type { Schema } from './schema';
 export {
   addScanStats,
@@ -15,6 +16,5 @@ export {
   judgeScanStats,
   type ScanStats,
   type ScanStatsVerdict,
-  type StatsProjection,
 } from './stats';
 export type { StorageConfig } from './storage';

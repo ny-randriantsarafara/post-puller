@@ -4,7 +4,7 @@ import {
   buildPublicationWindow as buildPublicationWindowFor,
 } from '@extractor/capture-core/stats';
 import type { PublicationWindow } from '@extractor/capture-core/messaging';
-import { POST_STATS_PROJECTION } from '../domain';
+import { POST_PROJECTION } from '../domain';
 import type { CapturedPost } from '../types/post';
 
 export type {
@@ -19,9 +19,9 @@ export {
 } from '@extractor/capture-core/stats';
 
 export function buildPublicationWindow(posts: CapturedPost[]): PublicationWindow {
-  return buildPublicationWindowFor(posts, POST_STATS_PROJECTION);
+  return buildPublicationWindowFor(posts, POST_PROJECTION);
 }
 
 export function buildCollectionStats(posts: CapturedPost[]): CollectionCaptureStats[] {
-  return buildCollectionStatsFor(posts, POST_STATS_PROJECTION);
+  return buildCollectionStatsFor(posts, POST_PROJECTION);
 }

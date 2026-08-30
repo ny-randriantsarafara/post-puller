@@ -1,12 +1,3 @@
-// How the core reads an item it knows nothing else about, so that counting and
-// date windows stay site-agnostic. Children are comments for a group post and
-// nothing at all for a message.
-export type StatsProjection<TItem> = {
-  countChildren: (item: TItem) => number;
-  readPublishedAt: (item: TItem) => string | null;
-  isIncomplete: (item: TItem) => boolean;
-};
-
 // What a scan saw, as opposed to what it stored. An item re-rendered and read a
 // second time is counted twice here, so these numbers measure the scan's work
 // rather than the records it produced; the records are counted per collection in

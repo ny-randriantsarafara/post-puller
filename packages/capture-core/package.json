@@ -12,6 +12,7 @@
     "./identity": "./src/identity/index.ts",
     "./messaging": "./src/messaging/index.ts",
     "./result": "./src/result.ts",
+    "./search": "./src/search/index.ts",
     "./stats": "./src/stats/index.ts",
     "./storage": "./src/storage/index.ts",
     "./testing/readBlobText": "./src/testing/readBlobText.ts",

@@ -189,6 +189,20 @@ test('captures visible posts, deduplicates, persists, and exports JSON', async (
     /\/groups\/sample-group\/posts\/1001\/?$/,
   );
 
+  // Searching is a walk of the publication-order index with a test applied to
+  // each post, so it is only right end to end: the store has to hold the text of
+  // a post the index reached, under a key the walk can page from.
+  const postCards = preview.locator('article.post-card');
+  await expect(postCards).toHaveCount(3);
+
+  const searchBox = preview.getByLabel('Search');
+  await searchBox.fill('manual scroll');
+  await expect(postCards).toHaveCount(1);
+  await expect(postCards.first()).toContainText('Post loaded after manual scroll');
+
+  await preview.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(postCards).toHaveCount(3);
+
   // The file is written a page at a time into a blob rather than serialised as one
   // string, so it is downloaded and parsed here: a header that no longer joins up
   // with the posts appended after it would still look right in any unit test of
@@ -210,9 +224,13 @@ test('captures visible posts, deduplicates, persists, and exports JSON', async (
     url: collectionUrl,
   });
   expect(exportedFile.stats.postCount).toBe(3);
+  // Oldest published first, which is not the order the posts were captured in:
+  // the scroll post was stored last and was published most recently, and the
+  // second post was stored first and published earliest. An export that came out
+  // in capture order would put them the other way round.
   expect(exportedFile.posts.map((post) => post.text)).toEqual([
-    'Post loaded after manual scroll',
     'Second captured post',
     'First captured post with expanded text',
+    'Post loaded after manual scroll',
   ]);
 });

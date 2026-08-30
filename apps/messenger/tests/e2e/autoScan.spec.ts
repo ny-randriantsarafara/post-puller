@@ -191,6 +191,17 @@ test('scrolls a conversation back to its start and stores every message once', a
     0,
   );
 
+  // Searching a conversation walks its date-ordered index applying the test to
+  // each message, so it is only right end to end: the text has to be stored, and
+  // the walk has to page from a key the index holds.
+  const messages = previewPage.locator('.message');
+  await previewPage.getByLabel('Search').fill('reply');
+  await expect(messages).toHaveCount(1);
+  await expect(messages.first()).toContainText('the reply already on screen');
+
+  await previewPage.getByRole('button', { name: 'Clear filters' }).click();
+  await expect(messages).toHaveCount(TOTAL_MESSAGES);
+
   await previewPage.close();
 });
 

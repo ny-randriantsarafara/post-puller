@@ -1,27 +1,76 @@
+import {
+  hasActiveFilters,
+  PreviewFilterBar,
+  WarningTally,
+  type PreviewFilters,
+} from '@extractor/capture-ui';
+import { toErrorMessage } from '@extractor/capture-core/errorMessage';
+import { resolvePageOffset } from '@extractor/capture-core/storage';
 import { useCallback, useEffect, useState } from 'react';
 import { downloadCollectionExports } from '../shared/export/downloadExport';
-import { listCollectionStats, listPostsPage } from '../shared/storage/postRepository';
+import {
+  countPostsBeforeDay,
+  countPostsByWarning,
+  findPostsPage,
+  listCollectionStats,
+  listPostsPage,
+  POST_ORDERS,
+  type PostOrderName,
+} from '../shared/storage/postRepository';
 import {
   formatPublicationWindow,
   type CollectionCaptureStats,
 } from '../shared/stats/collectionStats';
 import type { CapturedPost, ReactionBreakdown } from '../shared/types';
-import { REACTION_TYPES, sumReactionBreakdown } from '../shared/types';
+import {
+  formatAuthorLabel,
+  REACTION_TYPES,
+  sumReactionBreakdown,
+} from '../shared/types';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
 const ALL_GROUPS = 'all';
 
-function formatAuthor(post: CapturedPost): string {
-  if (post.author.kind === 'named') {
-    return post.author.name;
+const DEFAULT_FILTERS: PreviewFilters = {
+  text: '',
+  warning: null,
+  pageSize: 20,
+};
+
+// Long enough that typing a word is one read of the store rather than one per
+// letter, short enough that the list still feels attached to the keyboard.
+const SEARCH_DEBOUNCE_MS = 250;
+
+// An emptied search box is applied at once: waiting to stop filtering is waiting
+// for nothing, and a Clear button that has already gone leaves nothing to
+// explain why the list is still narrowed.
+function resolveSearchDelay(text: string): number {
+  if (text === '') {
+    return 0;
   }
 
-  if (post.author.kind === 'anonymous') {
-    return post.author.label;
-  }
-
-  return 'Unknown author';
+  return SEARCH_DEBOUNCE_MS;
 }
+
+const ORDER_LABELS: Record<PostOrderName, string> = {
+  newestPublication: 'Newest published first',
+  oldestPublication: 'Oldest published first',
+  newestCapture: 'Most recently captured first',
+};
+
+// What a page of posts amounts to. An unfiltered read knows the size of the
+// group it is paging; a filtered one knows only whether more matches follow.
+type PostsView = {
+  readonly posts: CapturedPost[];
+  readonly total: number | null;
+  readonly hasMore: boolean;
+};
+
+const EMPTY_VIEW: PostsView = {
+  posts: [],
+  total: null,
+  hasMore: false,
+};
 
 function formatPublicationDate(post: CapturedPost): string {
   if (post.publishedAt !== null) {
@@ -76,45 +125,145 @@ function formatEngagementSummary(post: CapturedPost): string {
   return parts.join(' · ');
 }
 
+function formatRange(view: PostsView, offset: number): string {
+  if (view.posts.length === 0) {
+    return 'Nothing on this page';
+  }
+
+  const firstShown = offset + 1;
+  const lastShown = offset + view.posts.length;
+
+  if (view.total === null) {
+    return `Matches ${String(firstShown)}-${String(lastShown)}`;
+  }
+
+  return `Showing ${String(firstShown)}-${String(lastShown)} of ${String(view.total)}`;
+}
+
 export function PreviewPage() {
-  const [posts, setPosts] = useState<CapturedPost[]>([]);
-  const [collectionStats, setGroupStats] = useState<CollectionCaptureStats[]>([]);
+  const [view, setView] = useState<PostsView>(EMPTY_VIEW);
+  const [collectionStats, setCollectionStats] = useState<CollectionCaptureStats[]>([]);
+  const [warningCounts, setWarningCounts] = useState<ReadonlyMap<string, number>>(
+    new Map(),
+  );
   const [selectedGroupUrl, setSelectedGroupUrl] = useState<string>(ALL_GROUPS);
-  const [total, setTotal] = useState(0);
+  const [orderName, setOrderName] = useState<PostOrderName>('newestPublication');
+  const [filters, setFilters] = useState<PreviewFilters>(DEFAULT_FILTERS);
+  // The search box moves with the keyboard; this is what the store has been
+  // asked about, which lags it by one debounce.
+  const [appliedText, setAppliedText] = useState('');
+  const [jumpDay, setJumpDay] = useState('');
   const [offset, setOffset] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadGroupStats = useCallback(async () => {
-    const stats = await listCollectionStats();
-    setGroupStats(stats);
-  }, []);
+  const collectionUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
+  const appliedFilters: PreviewFilters = { ...filters, text: appliedText };
+  const isFiltered = hasActiveFilters(appliedFilters);
 
-  const loadPage = useCallback(async (pageOffset: number, collectionUrl: string | null) => {
-    setIsLoading(true);
-    setErrorMessage(null);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAppliedText(filters.text);
+    }, resolveSearchDelay(filters.text));
 
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [filters.text]);
+
+  // The group cards and the warning codes the filter offers. Read once beside the
+  // first page rather than per page: they describe the whole store, and neither
+  // changes as the reader pages through it.
+  const loadSummaries = useCallback(async () => {
     try {
-      const page = await listPostsPage(pageOffset, PAGE_SIZE, collectionUrl);
-      setPosts(page.posts);
-      setTotal(page.total);
-      setOffset(page.offset);
+      const [stats, counts] = await Promise.all([
+        listCollectionStats(),
+        countPostsByWarning(),
+      ]);
+      setCollectionStats(stats);
+      setWarningCounts(counts);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load posts';
-      setErrorMessage(message);
-    } finally {
-      setIsLoading(false);
+      setErrorMessage(toErrorMessage(error));
     }
   }, []);
 
-  useEffect(() => {
-    void loadGroupStats();
-  }, [loadGroupStats]);
+  // One page, as the filters and the order describe it. Returns the page instead
+  // of showing it, so the effect below can decide whether it is still wanted.
+  const readPage = useCallback(async (): Promise<PostsView> => {
+    if (isFiltered) {
+      const page = await findPostsPage(
+        orderName,
+        { warning: appliedFilters.warning, text: appliedFilters.text },
+        offset,
+        appliedFilters.pageSize,
+        collectionUrl,
+      );
+
+      return { posts: page.posts, total: null, hasMore: page.hasMore };
+    }
+
+    const page = await listPostsPage(
+      orderName,
+      offset,
+      appliedFilters.pageSize,
+      collectionUrl,
+    );
+
+    return {
+      posts: page.posts,
+      total: page.total,
+      hasMore: offset + page.posts.length < page.total,
+    };
+  }, [
+    appliedFilters.pageSize,
+    appliedFilters.text,
+    appliedFilters.warning,
+    collectionUrl,
+    isFiltered,
+    offset,
+    orderName,
+  ]);
 
   useEffect(() => {
-    const collectionUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
-    void loadPage(0, collectionUrl);
-  }, [loadPage, selectedGroupUrl]);
+    void loadSummaries();
+  }, [loadSummaries]);
+
+  // A read the reader has already moved on from must not land. Switching group
+  // while a page is in flight starts a second read, and without this the one
+  // that finishes last wins rather than the one that was asked for last.
+  useEffect(() => {
+    const read = new AbortController();
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    const showPage = async () => {
+      try {
+        const nextView = await readPage();
+        if (read.signal.aborted) {
+          return;
+        }
+
+        setView(nextView);
+      } catch (error) {
+        if (read.signal.aborted) {
+          return;
+        }
+
+        setErrorMessage(toErrorMessage(error));
+        setView(EMPTY_VIEW);
+      } finally {
+        if (!read.signal.aborted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void showPage();
+
+    return () => {
+      read.abort();
+    };
+  }, [readPage]);
 
   // Driven by the group summaries the page already loaded, so exporting reads each
   // group's posts a page at a time rather than the whole store at once.
@@ -133,8 +282,26 @@ export function PreviewPage() {
     );
   };
 
-  const canGoPrevious = offset > 0;
-  const canGoNext = offset + PAGE_SIZE < total;
+  // The day is turned into a position rather than a filter: the reader lands on
+  // the page that day starts on and can keep paging from there.
+  const handleJumpToDay = async (day: string) => {
+    setJumpDay(day);
+
+    if (day === '') {
+      return;
+    }
+
+    const postsBefore = await countPostsBeforeDay(orderName, day, collectionUrl);
+    setOffset(resolvePageOffset(postsBefore, appliedFilters.pageSize, view.total));
+  };
+
+  // Every filter change means the reader is looking for something else, so the
+  // page they were on no longer refers to anything they asked for.
+  const handleFiltersChange = (nextFilters: PreviewFilters) => {
+    setFilters(nextFilters);
+    setOffset(0);
+  };
+
   const showGroupName = selectedGroupUrl === ALL_GROUPS;
 
   return (
@@ -145,7 +312,7 @@ export function PreviewPage() {
           <button
             type="button"
             className="button button--secondary"
-            disabled={total === 0 && collectionStats.length === 0}
+            disabled={collectionStats.length === 0}
             onClick={() => {
               void handleExport();
             }}
@@ -169,45 +336,94 @@ export function PreviewPage() {
               </article>
             ))}
           </div>
+          <WarningTally
+            warningCounts={warningCounts}
+            caption="Warnings across every captured post:"
+          />
         </section>
       )}
 
-      {collectionStats.length > 0 && (
+      <div className="preview__controls">
+        {collectionStats.length > 0 && (
+          <label className="preview__filter">
+            <span className="preview__filter-label">Show posts from</span>
+            <select
+              className="preview__filter-select"
+              value={selectedGroupUrl}
+              onChange={(event) => {
+                setSelectedGroupUrl(event.target.value);
+                setOffset(0);
+                setJumpDay('');
+              }}
+            >
+              <option value={ALL_GROUPS}>All groups</option>
+              {collectionStats.map((collectionStat) => (
+                <option key={collectionStat.collection.url} value={collectionStat.collection.url}>
+                  {formatCollectionLabel(collectionStat.collection)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
         <label className="preview__filter">
-          <span className="preview__filter-label">Show posts from</span>
+          <span className="preview__filter-label">Order</span>
           <select
             className="preview__filter-select"
-            value={selectedGroupUrl}
+            value={orderName}
             onChange={(event) => {
-              setSelectedGroupUrl(event.target.value);
+              const nextOrder = POST_ORDERS.find((order) => order === event.target.value);
+              if (nextOrder === undefined) {
+                return;
+              }
+
+              setOrderName(nextOrder);
+              setOffset(0);
+              // The date positioned the list in the order that was in force when
+              // it was picked, and no longer does.
+              setJumpDay('');
             }}
           >
-            <option value={ALL_GROUPS}>All groups</option>
-            {collectionStats.map((collectionStat) => (
-              <option key={collectionStat.collection.url} value={collectionStat.collection.url}>
-                {formatCollectionLabel(collectionStat.collection)}
+            {POST_ORDERS.map((order) => (
+              <option key={order} value={order}>
+                {ORDER_LABELS[order]}
               </option>
             ))}
           </select>
         </label>
-      )}
+      </div>
+
+      <PreviewFilterBar
+        filters={filters}
+        warningCounts={warningCounts}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        searchPlaceholder="Text, author, or a word in the comments"
+        jumpDay={jumpDay}
+        isJumpDisabled={isFiltered}
+        onFiltersChange={handleFiltersChange}
+        onJumpToDay={(day) => {
+          void handleJumpToDay(day);
+        }}
+      />
 
       {errorMessage !== null && <p className="post-card__warnings">{errorMessage}</p>}
 
       {isLoading && <div className="preview__empty">Loading captured posts…</div>}
 
-      {!isLoading && total === 0 && (
-        <div className="preview__empty">No captured posts yet.</div>
+      {!isLoading && view.posts.length === 0 && (
+        <div className="preview__empty">
+          {isFiltered ? 'No captured post matches that.' : 'No captured posts yet.'}
+        </div>
       )}
 
       {!isLoading &&
-        posts.map((post) => (
+        view.posts.map((post) => (
           <article key={post.identityKey} className="post-card">
             <div className="post-card__meta">
               {showGroupName && (
                 <span className="post-card__group">{formatCollectionLabel(post.collection)} · </span>
               )}
-              {formatAuthor(post)} · {formatPublicationDate(post)}
+              {formatAuthorLabel(post.author)} · {formatPublicationDate(post)}
               {post.displayedDate !== null && post.publishedAt !== null && (
                 <span> ({post.displayedDate})</span>
               )}{' '}
@@ -240,13 +456,7 @@ export function PreviewPage() {
                     className="comment-list__item"
                     style={{ marginLeft: `${String(comment.depth * 16)}px` }}
                   >
-                    <strong>
-                      {comment.author.kind === 'named'
-                        ? comment.author.name
-                        : comment.author.kind === 'anonymous'
-                          ? comment.author.label
-                          : 'Unknown'}
-                    </strong>
+                    <strong>{formatAuthorLabel(comment.author)}</strong>
                     : {comment.text ?? '[No visible text]'}
                   </li>
                 ))}
@@ -255,29 +465,27 @@ export function PreviewPage() {
           </article>
         ))}
 
-      {total > 0 && (
+      {/* Kept while the page is empty but the reader is not on the first one, so
+          a page that has nothing on it still has a way back off it. */}
+      {(view.posts.length > 0 || offset > 0) && (
         <div className="preview__pagination">
           <button
             type="button"
             className="button button--secondary"
-            disabled={!canGoPrevious}
+            disabled={offset === 0}
             onClick={() => {
-              const collectionUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
-              void loadPage(Math.max(offset - PAGE_SIZE, 0), collectionUrl);
+              setOffset(Math.max(offset - appliedFilters.pageSize, 0));
             }}
           >
             Previous
           </button>
-          <span>
-            Showing {offset + 1}-{Math.min(offset + PAGE_SIZE, total)} of {total}
-          </span>
+          <span>{formatRange(view, offset)}</span>
           <button
             type="button"
             className="button button--secondary"
-            disabled={!canGoNext}
+            disabled={!view.hasMore}
             onClick={() => {
-              const collectionUrl = selectedGroupUrl === ALL_GROUPS ? null : selectedGroupUrl;
-              void loadPage(offset + PAGE_SIZE, collectionUrl);
+              setOffset(offset + appliedFilters.pageSize);
             }}
           >
             Next

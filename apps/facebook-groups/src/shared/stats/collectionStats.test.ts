@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CapturedPost } from '../types';
+import { buildPostSortKey, type CapturedPost } from '../types';
 import {
   buildCollectionStats,
   buildPublicationWindow,
@@ -15,7 +15,9 @@ function createSamplePost(
 ): CapturedPost {
   const capturedAt = overrides.capturedAt ?? '2026-08-19T12:00:00.000Z';
 
-  return {
+  // Derived after the overrides rather than alongside the default date, so a
+  // post overridden to be undated carries the sort key an undated post gets.
+  const post: Omit<CapturedPost, 'sortKey'> = {
     identityKey: `postId:${collectionUrl}-${String(Math.random())}`,
     identitySource: 'externalId',
     fingerprint: null,
@@ -53,6 +55,8 @@ function createSamplePost(
     warnings: [],
     ...overrides,
   };
+
+  return { ...post, sortKey: buildPostSortKey(post.publishedAt, post.capturedAt) };
 }
 
 describe('collectionStats', () => {

@@ -2,7 +2,9 @@ import type { CollectionInfo } from '@extractor/capture-core/domain';
 import type { CapturedPost } from '../types';
 import type { PublicationWindow } from '../stats/collectionStats';
 
-export const EXPORT_SCHEMA_VERSION = 4;
+// Raised for sortKey, the publication-order key every post now carries, and for
+// the switch to writing a file in publication order rather than capture order.
+export const EXPORT_SCHEMA_VERSION = 5;
 
 export type { PublicationWindow };
 

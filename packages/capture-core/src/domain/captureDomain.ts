@@ -1,7 +1,7 @@
 import type { IdentityKeyPrefixes } from './identity';
 import type { CapturedItemBase } from './item';
+import type { ItemProjection } from './projection';
 import type { Schema } from './schema';
-import type { StatsProjection } from './stats';
 import type { StorageConfig } from './storage';
 
 // The half of a site definition that holds no DOM query and touches no chrome
@@ -17,7 +17,7 @@ export type CaptureDomain<
   readonly defaultOptions: TOptions;
   readonly storage: StorageConfig;
   readonly identityKeyPrefixes: IdentityKeyPrefixes;
-  readonly stats: StatsProjection<TItem>;
+  readonly projection: ItemProjection<TItem>;
   isTargetUrl: (url: string) => boolean;
   isBetterCapture: (existing: TItem, incoming: TItem) => boolean;
   mergeCapture: (existing: TItem, incoming: TItem) => TItem;

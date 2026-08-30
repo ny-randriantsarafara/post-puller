@@ -5,7 +5,12 @@ import {
 import type { IdentityKeyPrefixes } from '@extractor/capture-core/domain';
 import { createPostFingerprint } from './postFingerprint';
 import { extractPostIdFromElement, extractPostIdFromUrl, normalizePostUrl } from './postUrl';
-import type { CapturedPost, ParsedPostDraft } from '../types';
+import {
+  buildPostSortKey,
+  resolveAuthorLabel,
+  type CapturedPost,
+  type ParsedPostDraft,
+} from '../types';
 
 // These are the prefixes of primary keys already written to IndexedDB, so they
 // stay on the old field names. Deriving them from externalId/externalUrl would
@@ -24,18 +29,6 @@ export {
   retainCapturedIdentity,
 } from '@extractor/capture-core/identity';
 export { contradictsStoredIdentity } from '@extractor/capture-core/storage';
-
-export function resolveAuthorLabel(author: ParsedPostDraft['author']): string {
-  if (author.kind === 'named') {
-    return author.name;
-  }
-
-  if (author.kind === 'anonymous') {
-    return author.label;
-  }
-
-  return 'unknown-author';
-}
 
 export async function resolvePostIdentity(
   draft: ParsedPostDraft,
@@ -73,6 +66,7 @@ export async function finalizeCapturedPost(
     ...draft,
     ...identity,
     fingerprint,
+    sortKey: buildPostSortKey(draft.publishedAt, capturedAt),
     capturedAt,
     updatedAt: capturedAt,
   };

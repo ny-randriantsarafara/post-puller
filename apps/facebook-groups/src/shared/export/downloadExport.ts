@@ -1,6 +1,6 @@
 import type { CollectionInfo } from '@extractor/capture-core/domain';
 import { buildJsonRecordBlob, downloadBlob } from '@extractor/capture-core/export';
-import { listPostsPage } from '../storage/postRepository';
+import { listPostsPage, type PostOrderName } from '../storage/postRepository';
 import {
   addPostsToCollectionExportSummary,
   buildCollectionExportFileName,
@@ -13,6 +13,13 @@ import {
 // that no page is a memory problem of its own.
 const EXPORT_PAGE_SIZE = 200;
 
+// A file lists its posts in the order they were published, which is the order
+// somebody reading the export wants them in. Deliberately not whatever the
+// preview happens to be sorted by when the button is pressed. Posts whose date
+// never parsed sort ahead of the dated ones and so head the file, together,
+// rather than being scattered through it under the date they were captured on.
+const EXPORT_ORDER: PostOrderName = 'oldestPublication';
+
 // The stats and the window describe the whole group and are written at the top of
 // the file, so the group is read twice: once to count it and once to write it.
 // Reading it twice costs a second pass over an index; holding it to avoid that
@@ -23,7 +30,12 @@ async function summarizeCollection(
   let summary = EMPTY_COLLECTION_EXPORT_SUMMARY;
 
   for (let offset = 0; ; offset += EXPORT_PAGE_SIZE) {
-    const page = await listPostsPage(offset, EXPORT_PAGE_SIZE, collectionUrl);
+    const page = await listPostsPage(
+      EXPORT_ORDER,
+      offset,
+      EXPORT_PAGE_SIZE,
+      collectionUrl,
+    );
     summary = addPostsToCollectionExportSummary(summary, page.posts);
 
     if (page.posts.length < EXPORT_PAGE_SIZE) {
@@ -47,7 +59,7 @@ export async function downloadCollectionExport(
     ),
     recordsKey: 'posts',
     readPage: async (offset, limit) =>
-      (await listPostsPage(offset, limit, collection.url)).posts,
+      (await listPostsPage(EXPORT_ORDER, offset, limit, collection.url)).posts,
     pageSize: EXPORT_PAGE_SIZE,
   });
 

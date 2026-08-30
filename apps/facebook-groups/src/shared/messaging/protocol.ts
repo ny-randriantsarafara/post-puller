@@ -7,7 +7,7 @@ import {
 } from '@extractor/capture-core/messaging';
 import { z } from 'zod';
 import type { CaptureOptions } from '../types/captureOptions';
-import type { CapturedPost } from '../types/post';
+import { buildPostSortKey, type CapturedPost } from '../types/post';
 import { REACTION_TYPES } from '../types/reactions';
 import { COMMENT_WARNINGS, POST_WARNINGS } from '../types/warnings';
 
@@ -97,28 +97,37 @@ function migrateLegacyIdentitySource(value: unknown): unknown {
   return value;
 }
 
-const capturedPostFieldsSchema = z.object({
-  identityKey: z.string(),
-  identitySource: z.enum(['externalId', 'externalUrl', 'contentHash']),
-  // Defaulted so records written before fingerprinting existed still read back.
-  fingerprint: z.string().nullable().default(null),
-  externalId: z.string().nullable(),
-  externalUrl: z.string().nullable(),
-  collection: collectionInfoSchema,
-  author: postAuthorSchema,
-  text: z.string().nullable(),
-  displayedDate: z.string().nullable(),
-  publishedAt: z.string().nullable(),
-  reactionCount: z.number().nullable(),
-  reactionBreakdown: reactionBreakdownSchema,
-  commentCount: z.number().nullable().default(null),
-  shareCount: z.number().nullable().default(null),
-  comments: z.array(commentSchema),
-  attachments: z.array(attachmentSchema),
-  capturedAt: z.string(),
-  updatedAt: z.string(),
-  warnings: z.array(z.enum(POST_WARNINGS)),
-});
+const capturedPostFieldsSchema = z
+  .object({
+    identityKey: z.string(),
+    identitySource: z.enum(['externalId', 'externalUrl', 'contentHash']),
+    // Defaulted so records written before fingerprinting existed still read back.
+    fingerprint: z.string().nullable().default(null),
+    externalId: z.string().nullable(),
+    externalUrl: z.string().nullable(),
+    collection: collectionInfoSchema,
+    author: postAuthorSchema,
+    text: z.string().nullable(),
+    displayedDate: z.string().nullable(),
+    publishedAt: z.string().nullable(),
+    // Absent from every record written before posts could be read in publication
+    // order. It is derived below rather than defaulted, because the value depends
+    // on two other fields of the same record.
+    sortKey: z.string().optional(),
+    reactionCount: z.number().nullable(),
+    reactionBreakdown: reactionBreakdownSchema,
+    commentCount: z.number().nullable().default(null),
+    shareCount: z.number().nullable().default(null),
+    comments: z.array(commentSchema),
+    attachments: z.array(attachmentSchema),
+    capturedAt: z.string(),
+    updatedAt: z.string(),
+    warnings: z.array(z.enum(POST_WARNINGS)),
+  })
+  .transform((post) => ({
+    ...post,
+    sortKey: post.sortKey ?? buildPostSortKey(post.publishedAt, post.capturedAt),
+  }));
 
 export const capturedPostSchema = z.preprocess(
   migrateLegacyPost,

@@ -9,7 +9,7 @@ import {
   EMPTY_COLLECTION_EXPORT_SUMMARY,
   EXPORT_SCHEMA_VERSION,
 } from './exportEnvelope';
-import type { CapturedPost } from '../types';
+import { buildPostSortKey, type CapturedPost } from '../types';
 
 const EXPORTED_AT = '2026-08-19T12:00:00.000Z';
 
@@ -27,6 +27,7 @@ const samplePost: CapturedPost = {
   text: 'Hello',
   displayedDate: '1 hour ago',
   publishedAt: '2026-08-19T11:00:00.000Z',
+  sortKey: '2026-08-19T11:00:00.000Z',
   reactionCount: 2,
   reactionBreakdown: { like: 2 },
   commentCount: 1,
@@ -61,6 +62,7 @@ const secondGroupPost: CapturedPost = {
     url: 'https://www.facebook.com/groups/other-group',
   },
   publishedAt: '2026-08-10T08:00:00.000Z',
+  sortKey: '2026-08-10T08:00:00.000Z',
   capturedAt: '2026-08-19T12:00:00.000Z',
   updatedAt: '2026-08-19T12:00:00.000Z',
 };
@@ -118,6 +120,7 @@ describe('buildCollectionExportFileName', () => {
       ...samplePost,
       displayedDate: null,
       publishedAt: null,
+      sortKey: buildPostSortKey(null, samplePost.capturedAt),
     };
 
     expect(exportFileName([undatedPost])).toBe('sample-group_export-2026-08-19.json');

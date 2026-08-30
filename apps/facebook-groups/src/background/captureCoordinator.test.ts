@@ -7,7 +7,11 @@ import {
 import { clearPosts, upsertPosts } from '../shared/storage/postRepository';
 import { sumCollectionStats } from '../shared/stats/collectionStats';
 import type { CapturedPost } from '../shared/types';
-import { DEFAULT_CAPTURE_OPTIONS, type CaptureOptions } from '../shared/types';
+import {
+  buildPostSortKey,
+  DEFAULT_CAPTURE_OPTIONS,
+  type CaptureOptions,
+} from '../shared/types';
 import { handleBackgroundMessage } from './captureCoordinator';
 
 const CONNECTION_ERROR = 'Could not establish connection. Receiving end does not exist.';
@@ -100,6 +104,7 @@ function createStoredPost(postId: string, collectionUrl: string, collectionName:
     text: `Post ${postId}`,
     displayedDate: '1 hour ago',
     publishedAt: capturedAt,
+    sortKey: buildPostSortKey(capturedAt, capturedAt),
     reactionCount: 1,
     reactionBreakdown: {},
     commentCount: null,

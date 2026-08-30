@@ -1,4 +1,4 @@
-import type { CapturedComment, CapturedPost } from './types';
+import { resolveAuthorLabel, type CapturedComment, type CapturedPost } from './types';
 import { sumReactionBreakdown } from './types/reactions';
 
 function textLength(text: string | null): number {
@@ -10,14 +10,7 @@ function commentKey(comment: CapturedComment): string {
     return `id:${comment.commentId}`;
   }
 
-  const authorLabel =
-    comment.author.kind === 'named'
-      ? comment.author.name
-      : comment.author.kind === 'anonymous'
-        ? comment.author.label
-        : 'unknown-author';
-
-  return `fallback:${authorLabel}:${comment.text?.slice(0, 60) ?? ''}`;
+  return `fallback:${resolveAuthorLabel(comment.author)}:${comment.text?.slice(0, 60) ?? ''}`;
 }
 
 function hasMoreReactionDetail(

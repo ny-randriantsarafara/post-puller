@@ -67,6 +67,86 @@ export function collectIndexPage(
   });
 }
 
+// Walks an index applying a test the index cannot answer itself. A substring
+// search and a warning filter are both of that kind: an index orders records or
+// finds them under an exact key, and neither of those finds every post that
+// mentions a word. One record past the page is selected so the caller can say
+// whether another page exists without counting matches it will never show.
+export function collectSelectedIndexPage<TSelected>(
+  index: IDBIndex,
+  range: IDBKeyRange | null,
+  offset: number,
+  limit: number,
+  direction: IDBCursorDirection,
+  select: (value: unknown) => TSelected | null,
+): Promise<{ selected: TSelected[]; hasMore: boolean }> {
+  return new Promise((resolve, reject) => {
+    const selected: TSelected[] = [];
+    const request = index.openCursor(range, direction);
+    let skippedCount = 0;
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor === null) {
+        resolve({ selected, hasMore: false });
+        return;
+      }
+
+      const selectedValue = select(cursor.value);
+      if (selectedValue === null) {
+        cursor.continue();
+        return;
+      }
+
+      if (skippedCount < offset) {
+        skippedCount += 1;
+        cursor.continue();
+        return;
+      }
+
+      if (selected.length === limit) {
+        resolve({ selected, hasMore: true });
+        return;
+      }
+
+      selected.push(selectedValue);
+      cursor.continue();
+    };
+
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to select a page from an index'));
+    };
+  });
+}
+
+// The distinct keys an index holds, read with a key cursor so no record is
+// deserialised. Over a multiEntry index of warning codes this is the vocabulary
+// the store actually contains, which is what a count per code is asked for.
+export function collectDistinctIndexKeys(index: IDBIndex): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const keys: string[] = [];
+    const request = index.openKeyCursor(null, 'nextunique');
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor === null) {
+        resolve(keys);
+        return;
+      }
+
+      if (typeof cursor.key === 'string') {
+        keys.push(cursor.key);
+      }
+
+      cursor.continue();
+    };
+
+    request.onerror = () => {
+      reject(request.error ?? new Error('Failed to read the keys of an index'));
+    };
+  });
+}
+
 // Deletes through a cursor for the same reason: the keys of one collection are
 // found by walking its own range instead of reading every record in the store.
 export function deleteIndexRange(index: IDBIndex, range: IDBKeyRange): Promise<void> {
@@ -104,11 +184,38 @@ function resolveUpgradedStore(
   return request.transaction?.objectStore(storeConfig.name) ?? null;
 }
 
+// Rewrites the records a store already holds. An index only ever finds records
+// that carry the field it indexes, so a field introduced for ordering has to be
+// written into what is already stored; deriving it when a record is read leaves
+// that record out of the index and therefore out of the ordered page it belongs
+// in. A record the backfill cannot make sense of is left exactly as it was
+// rather than aborting the upgrade with it.
+function backfillStoredItems(
+  store: IDBObjectStore,
+  backfillItem: (value: unknown) => unknown,
+): void {
+  const request = store.openCursor();
+
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (cursor === null) {
+      return;
+    }
+
+    cursor.update(backfillItem(cursor.value));
+    cursor.continue();
+  };
+}
+
 // Indexes are created from the declared schema rather than imperatively per
 // version. Records missing an indexed field are left out of the index by
 // IndexedDB instead of failing the upgrade, which is what lets an index be
 // added to a store that already holds data.
-function upgradeDatabase(request: IDBOpenDBRequest, config: StorageConfig): void {
+function upgradeDatabase(
+  request: IDBOpenDBRequest,
+  config: StorageConfig,
+  oldVersion: number,
+): void {
   for (const storeConfig of config.stores) {
     const store = resolveUpgradedStore(request, storeConfig);
     if (store === null) {
@@ -128,6 +235,16 @@ function upgradeDatabase(request: IDBOpenDBRequest, config: StorageConfig): void
         unique: index.unique ?? false,
       });
     }
+
+    // Version 0 is a database that has just been created, so it holds nothing to
+    // rewrite and every record written from here on carries the field already.
+    if (
+      config.backfillItem !== undefined &&
+      oldVersion > 0 &&
+      storeConfig.name === config.itemStoreName
+    ) {
+      backfillStoredItems(store, config.backfillItem);
+    }
   }
 }
 
@@ -135,8 +252,8 @@ export function openDatabase(config: StorageConfig): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(config.databaseName, config.version);
 
-    request.onupgradeneeded = () => {
-      upgradeDatabase(request, config);
+    request.onupgradeneeded = (event) => {
+      upgradeDatabase(request, config, event.oldVersion);
     };
 
     request.onsuccess = () => {

@@ -22,6 +22,7 @@ type SampleItem = {
   publishedAt: string | null;
   text: string;
   tags: string[];
+  warnings: string[];
 };
 
 const sampleItemSchema = z.object({
@@ -36,6 +37,7 @@ const sampleItemSchema = z.object({
   publishedAt: z.string().nullable().default(null),
   text: z.string(),
   tags: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
 });
 
 // Deliberately unlike the field names, the way a real domain's persisted key
@@ -56,6 +58,7 @@ const sampleDomain: CaptureDomain<SampleItem, { verbose: boolean }> = {
     version: 1,
     itemStoreName: 'items',
     collectionIndexName: 'by_collection',
+    warningIndexName: 'by_warning',
     stores: [
       {
         name: 'items',
@@ -68,18 +71,18 @@ const sampleDomain: CaptureDomain<SampleItem, { verbose: boolean }> = {
             name: 'by_collection_captured_at',
             keyPath: ['collection.url', 'capturedAt'],
           },
+          { name: 'by_warning', keyPath: 'warnings', multiEntry: true },
         ],
       },
       { name: 'collections', keyPath: 'url', indexes: [] },
     ],
   },
   identityKeyPrefixes: SAMPLE_KEY_PREFIXES,
-  stats: {
+  projection: {
     countChildren: (item) => item.tags.length,
     readPublishedAt: (item) => item.publishedAt,
-    // A stub for a site that truncates: a short record is one a later sighting
-    // can still complete, which is what the counts have to follow.
-    isIncomplete: (item) => item.text.length < 5,
+    readWarnings: (item) => item.warnings,
+    readSearchableText: (item) => [item.text, ...item.tags],
   },
   isTargetUrl: (url) => url.startsWith('https://example.test/'),
   isBetterCapture: (existing, incoming) => incoming.text.length > existing.text.length,
@@ -105,8 +108,11 @@ function sumItemCount(deltas: CollectionStatsDelta[]): number {
   return deltas.reduce((total, delta) => total + delta.itemCount, 0);
 }
 
+// A stub for a site that truncates: a short record is one a later sighting can
+// still complete, so it carries the warning that says so. What is being tested
+// is that the counts follow the warnings, not which codes a real site emits.
 function createItem(overrides: Partial<SampleItem> = {}): SampleItem {
-  return {
+  const item: SampleItem = {
     identityKey: buildIdentityKey(SAMPLE_KEY_PREFIXES, 'contentHash', 'hash-1'),
     identitySource: 'contentHash',
     fingerprint: 'fingerprint-1',
@@ -118,7 +124,17 @@ function createItem(overrides: Partial<SampleItem> = {}): SampleItem {
     publishedAt: null,
     text: 'a first sighting',
     tags: [],
+    warnings: [],
     ...overrides,
+  };
+
+  if (overrides.warnings !== undefined) {
+    return item;
+  }
+
+  return {
+    ...item,
+    warnings: item.text.length < 5 ? ['TRUNCATED_TEXT'] : [],
   };
 }
 
@@ -470,5 +486,132 @@ describe('createItemRepository', () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]?.collection.url).toBe(OTHER_COLLECTION.url);
+  });
+
+  // Three records a day apart, the middle one truncated, so a filter and a jump
+  // both have something to land on that is not the first or the last.
+  async function storeThreeDays(): Promise<void> {
+    await repository.upsertItems([
+      createItem({
+        identityKey: buildIdentityKey(SAMPLE_KEY_PREFIXES, 'externalId', '50'),
+        identitySource: 'externalId',
+        externalId: '50',
+        fingerprint: 'fingerprint-50',
+        capturedAt: '2026-08-01T10:00:00.000Z',
+        text: 'the première of the season',
+      }),
+      createItem({
+        identityKey: buildIdentityKey(SAMPLE_KEY_PREFIXES, 'externalId', '51'),
+        identitySource: 'externalId',
+        externalId: '51',
+        fingerprint: 'fingerprint-51',
+        capturedAt: '2026-08-02T10:00:00.000Z',
+        text: 'cut',
+      }),
+      createItem({
+        identityKey: buildIdentityKey(SAMPLE_KEY_PREFIXES, 'externalId', '52'),
+        identitySource: 'externalId',
+        externalId: '52',
+        fingerprint: 'fingerprint-52',
+        capturedAt: '2026-08-03T10:00:00.000Z',
+        text: 'the last word',
+        tags: ['première'],
+      }),
+    ]);
+  }
+
+  it('finds only the records carrying a warning code', async () => {
+    await storeThreeDays();
+
+    const page = await repository.findItemsPage(
+      NEWEST_FIRST,
+      { warning: 'TRUNCATED_TEXT', text: null },
+      0,
+      10,
+    );
+
+    expect(page.items.map((item) => item.text)).toEqual(['cut']);
+    expect(page.hasMore).toBe(false);
+  });
+
+  // Typed without the accent, which is how somebody searching for it will type
+  // it, and matched in a tag as well as in the text.
+  it('finds records by an accent-insensitive substring of any searchable part', async () => {
+    await storeThreeDays();
+
+    const page = await repository.findItemsPage(
+      NEWEST_FIRST,
+      { warning: null, text: 'premiere' },
+      0,
+      10,
+    );
+
+    expect(page.items.map((item) => item.text)).toEqual([
+      'the last word',
+      'the première of the season',
+    ]);
+  });
+
+  it('reports that more matches follow without counting them', async () => {
+    await storeThreeDays();
+
+    const page = await repository.findItemsPage(
+      NEWEST_FIRST,
+      { warning: null, text: 'the' },
+      0,
+      1,
+    );
+
+    expect(page.items).toHaveLength(1);
+    expect(page.hasMore).toBe(true);
+  });
+
+  it('counts the stored records under each warning code', async () => {
+    await storeThreeDays();
+
+    expect(await repository.countItemsByWarning()).toEqual(
+      new Map([['TRUNCATED_TEXT', 1]]),
+    );
+  });
+
+  // The offset a reader has to page to in order to land on a day. Newest first,
+  // so the records ahead of the second are the ones captured after it.
+  it('counts the records a newest-first read reaches before a day', async () => {
+    await storeThreeDays();
+
+    expect(
+      await repository.countItemsBefore(NEWEST_FIRST, '2026-08-02T23:59:59.999Z'),
+    ).toBe(1);
+  });
+
+  it('counts the records an oldest-first read reaches before a day', async () => {
+    await storeThreeDays();
+
+    const oldestFirst: ItemPageOrder = { ...NEWEST_FIRST, direction: 'next' };
+
+    expect(await repository.countItemsBefore(oldestFirst, '2026-08-03')).toBe(2);
+  });
+
+  it('counts a day within one collection without the records of another', async () => {
+    await storeThreeDays();
+    await repository.upsertItems([
+      createItem({
+        identityKey: buildIdentityKey(SAMPLE_KEY_PREFIXES, 'externalId', '60'),
+        identitySource: 'externalId',
+        externalId: '60',
+        fingerprint: 'fingerprint-60',
+        collection: OTHER_COLLECTION,
+        capturedAt: '2026-08-04T10:00:00.000Z',
+        text: 'elsewhere and later',
+      }),
+    ]);
+
+    expect(
+      await repository.countItemsBefore(
+        NEWEST_FIRST,
+        '2026-08-02T23:59:59.999Z',
+        COLLECTION.url,
+      ),
+    ).toBe(1);
   });
 });

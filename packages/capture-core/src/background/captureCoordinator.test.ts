@@ -79,6 +79,9 @@ function createRepository(
     listAllItems: unreachable,
     listCollectionStats: () => Promise.resolve([]),
     listItemsPage: unreachable,
+    findItemsPage: unreachable,
+    countItemsByWarning: unreachable,
+    countItemsBefore: unreachable,
     clearItems: unreachable,
     clearCollectionItems: unreachable,
     write: unreachable,
@@ -103,11 +106,15 @@ function createCoordinator(
         version: 1,
         itemStoreName: 'items',
         collectionIndexName: 'by_collection',
+        warningIndexName: 'by_warning',
         stores: [
           {
             name: 'items',
             keyPath: 'identityKey',
-            indexes: [{ name: 'by_collection', keyPath: 'collection.url' }],
+            indexes: [
+              { name: 'by_collection', keyPath: 'collection.url' },
+              { name: 'by_warning', keyPath: 'warnings', multiEntry: true },
+            ],
           },
         ],
       },
@@ -116,10 +123,11 @@ function createCoordinator(
         externalUrl: 'url',
         contentHash: 'hash',
       },
-      stats: {
+      projection: {
         countChildren: () => 0,
         readPublishedAt: () => null,
-        isIncomplete: () => false,
+        readWarnings: () => [],
+        readSearchableText: () => [],
       },
       isTargetUrl: () => true,
       isBetterCapture: () => false,

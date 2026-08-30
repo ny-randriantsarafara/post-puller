@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listAllPosts, upsertPosts } from './postRepository';
+import { listAllPosts, listPostsPage, upsertPosts } from './postRepository';
 import { finalizeCapturedPost } from '../identity/postIdentity';
 import type { Attachment, CapturedComment, PostAuthor, PostWarning } from '../types';
 
@@ -119,7 +119,9 @@ async function seedLegacyPost(post: LegacyStoredPost = legacyPost): Promise<void
 
 describe('postRepository schema upgrade', () => {
   // Runs first on purpose: it is the only test that opens the database at
-  // version 1, which requires that nothing has upgraded it yet.
+  // version 1, which requires that nothing has upgraded it yet. It is therefore
+  // also the only test that sees the upgrade to the current version happen, and
+  // so the only place the backfill below can be observed.
   it('keeps posts captured before fingerprints existed', async () => {
     const legacyDatabase = await openLegacyDatabase();
     await writeLegacyPost(legacyDatabase);
@@ -130,6 +132,17 @@ describe('postRepository schema upgrade', () => {
     expect(storedPosts).toHaveLength(1);
     expect(storedPosts[0]?.externalId).toBe('1');
     expect(storedPosts[0]?.fingerprint).toBeNull();
+  });
+
+  // The failure this guards against is silent in a different way: a record with
+  // no sortKey is not in the index publication order reads, so it would be
+  // stored, exported, counted, and missing from every page of the preview.
+  it('gives a post written before publication order a place in it', async () => {
+    const page = await listPostsPage('newestPublication', 0, 20);
+
+    expect(page.total).toBe(1);
+    expect(page.posts[0]?.identityKey).toBe('postId:1');
+    expect(page.posts[0]?.sortKey).toBe('2026-08-19T11:00:00.000Z');
   });
 
   it('reads records written under the Facebook field names', async () => {
