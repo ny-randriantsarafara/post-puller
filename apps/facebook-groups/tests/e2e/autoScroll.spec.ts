@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { parseBackgroundResponse } from '../../src/shared/messaging/protocol';
 import { sumCollectionStats } from '../../src/shared/stats/collectionStats';
 import type { CaptureSession } from '../../src/shared/types';
+import { launchExtensionContext } from './extensionContext';
 
-const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'growing-group-page.html');
 const collectionUrl = 'https://www.facebook.com/groups/auto-group';
 const TOTAL_STORIES = 6;
@@ -14,13 +14,7 @@ let context: BrowserContext;
 let facebookPage: Page;
 
 test.beforeAll(async () => {
-  context = await chromium.launchPersistentContext('', {
-    headless: false,
-    args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
-    ],
-  });
+  context = await launchExtensionContext();
 
   facebookPage = await context.newPage();
 

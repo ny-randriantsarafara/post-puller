@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import {
   parseBackgroundResponse,
   type BackgroundResponse,
 } from '../../src/shared/messaging/protocol';
 import { DEFAULT_CAPTURE_OPTIONS } from '../../src/shared/types';
+import { launchExtensionContext } from './extensionContext';
 
-const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'comment-expansion-page.html');
 const collectionUrl = 'https://www.facebook.com/groups/comment-expansion';
 
@@ -15,13 +15,7 @@ let context: BrowserContext;
 let facebookPage: Page;
 
 test.beforeAll(async () => {
-  context = await chromium.launchPersistentContext('', {
-    headless: false,
-    args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
-    ],
-  });
+  context = await launchExtensionContext();
 
   facebookPage = await context.newPage();
 

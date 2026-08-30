@@ -48,7 +48,7 @@ pnpm install
 pnpm verify            # lint, typecheck, test, no-network guard, build
 pnpm build             # every workspace
 pnpm test              # unit tests, every workspace
-pnpm test:e2e          # Playwright, one workspace at a time
+pnpm test:e2e          # Playwright, headless, one workspace at a time
 pnpm check:no-network  # fails on fetch, XMLHttpRequest, WebSocket, sendBeacon
 ```
 

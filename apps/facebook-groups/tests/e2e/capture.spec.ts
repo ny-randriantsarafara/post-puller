@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { z } from 'zod';
 import {
   parseBackgroundResponse,
   type BackgroundResponse,
 } from '../../src/shared/messaging/protocol';
 import { sumCollectionStats } from '../../src/shared/stats/collectionStats';
+import { launchExtensionContext } from './extensionContext';
 
 // Only what this test reads back out of an exported file, parsed rather than
 // asserted so a file whose shape changed fails here instead of being read as if
@@ -17,7 +18,6 @@ const exportedFileSchema = z.object({
   posts: z.array(z.object({ text: z.string().nullable() })),
 });
 
-const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'group-page.html');
 const collectionUrl = 'https://www.facebook.com/groups/sample-group';
 
@@ -25,13 +25,7 @@ let context: BrowserContext;
 let facebookPage: Page;
 
 test.beforeAll(async () => {
-  context = await chromium.launchPersistentContext('', {
-    headless: false,
-    args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
-    ],
-  });
+  context = await launchExtensionContext();
 
   facebookPage = await context.newPage();
 

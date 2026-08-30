@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test, expect, chromium, type BrowserContext, type Page } from '@playwright/test';
+import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { parseBackgroundResponse } from '../../src/shared/messaging/protocol';
 import type { CaptureSession } from '../../src/shared/types/session';
+import { launchExtensionContext } from './extensionContext';
 
-const extensionPath = join(import.meta.dirname, '..', '..', 'dist');
 const fixturePath = join(import.meta.dirname, '..', 'fixtures', 'thread-page.html');
 const THREAD_ID = '61550999888777';
 const threadUrl = `https://www.messenger.com/t/${THREAD_ID}`;
@@ -16,13 +16,7 @@ let context: BrowserContext;
 let threadPage: Page;
 
 test.beforeAll(async () => {
-  context = await chromium.launchPersistentContext('', {
-    headless: false,
-    args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
-    ],
-  });
+  context = await launchExtensionContext();
 
   threadPage = await context.newPage();
 
